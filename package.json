@@ -1,0 +1,60 @@
+{
+  "name": "wuwa-map-companion",
+  "version": "1.1.0",
+  "description": "鸣潮 · 库街区大地图探索助手（本地识图 / 合规辅助）",
+  "main": "main/index.js",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "test": "node --test test/*.test.mjs",
+    "pack:dir": "electron-builder --win --dir",
+    "dist:win": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^45.4.1",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "com.local.wuwa.mapcompanion",
+    "productName": "鸣潮探索助手",
+    "asar": true,
+    "directories": {
+      "output": "release",
+      "buildResources": "assets"
+    },
+    "files": [
+      "main/**/*",
+      "renderer/**/*",
+      "preload.js",
+      "data/**/*",
+      "assets/icon.png",
+      "assets/tray.png",
+      "assets/maps/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "deleteAppDataOnUninstall": false
+    },
+    "portable": {
+      "artifactName": "WuwaMapCompanion-${version}-portable.exe"
+    }
+  }
+}
