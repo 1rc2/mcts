@@ -485,8 +485,12 @@ class MainWindow(QMainWindow):
         if self.dataset is not None:
             info = (f"{len(self.points)} 个点位 · {len(self.dataset.regions)} 个区域 · "
                     f"{self.dataset.map_width}×{self.dataset.map_height}")
-        self.panel.set_map_packs([(p.key, p.name) for p in packs],
-                                 self._current_pack_key(packs), info)
+        key = self._current_pack_key(packs)
+        items = [(p.key, p.name) for p in packs]
+        self.panel.set_map_packs(items, key, info)
+        dlg = getattr(self, "_official_dialog", None)
+        if dlg is not None and hasattr(dlg, "set_map_packs"):
+            dlg.set_map_packs(items, key)
 
     def select_map_pack(self, key: str) -> None:
         """切换 import 根目录（地面世界）或 maps/state_* 子地图。"""
@@ -539,6 +543,8 @@ class MainWindow(QMainWindow):
                 dlg.show_main_requested.connect(self.show_main_window)
                 dlg.hide_main_requested.connect(lambda: self.enter_map_only())
                 dlg.guide_requested.connect(self.start_guide_ui)
+                dlg.overlay_toggled.connect(self._toggle_overlay)
+                dlg.map_pack_selected.connect(self.select_map_pack)
                 dlg.guide.plan_requested.connect(self._guide_plan)
                 dlg.guide.complete_requested.connect(self._guide_complete)
                 dlg.guide.skip_requested.connect(self._guide_skip)
@@ -552,6 +558,8 @@ class MainWindow(QMainWindow):
                 dlg.raise_()
                 dlg.activateWindow()
             dlg.set_guide_mode(self.guide_mode)
+            dlg.set_overlay_state(bool(self.ui.get("overlay", False)))
+            self._refresh_map_packs()
             if self.guide_mode:
                 self._refresh_guide_options()
             dlg.set_vision_state(bool(self.cfg.vision.get("enabled", False)))
@@ -894,6 +902,7 @@ class MainWindow(QMainWindow):
         visible = {l.key for l in self.layers if self.cfg.layer_visible(l.key)}
         self.canvas.set_layer_visibility(visible)
         self.panel.sync_layer_checks(visible)
+        self._update_overlay_status()
 
     def _on_layers_all(self, on: bool) -> None:
         for l in self.layers:
@@ -901,6 +910,7 @@ class MainWindow(QMainWindow):
         visible = {l.key for l in self.layers if on}
         self.canvas.set_layer_visibility(visible)
         self.panel.sync_layer_checks(visible)
+        self._update_overlay_status()
 
     def _on_search(self, text: str) -> None:
         self._filter_query = text.strip().lower()
@@ -1292,6 +1302,9 @@ class MainWindow(QMainWindow):
         self.btn_overlay.blockSignals(True)
         self.btn_overlay.setChecked(on)
         self.btn_overlay.blockSignals(False)
+        dlg = getattr(self, "_official_dialog", None)
+        if dlg is not None:
+            dlg.set_overlay_state(on)
         if not on:
             self.overlay.hide()
             return
@@ -1332,11 +1345,25 @@ class MainWindow(QMainWindow):
         if dlg is not None:
             dlg.set_route(coords, self.waypoint, label)
 
+    def _next_route_point(self):
+        if not self.active_route or not (0 <= self.waypoint < len(self.active_route.steps)):
+            return None
+        st = self.active_route.steps[self.waypoint]
+        return next((p for p in self.points if p.id == st.point_id), None)
+
+    def _route_distance_m(self) -> float | None:
+        point = self._next_route_point()
+        if point is None or not self.canvas._player:
+            return None
+        pack = self._current_pack()
+        bbox = getattr(pack, "bbox", None) if pack is not None else None
+        return meters_between((point.x, point.y), self.canvas._player, bbox)
+
     def _update_overlay_status(self) -> None:
         # 官方地图窗口那行仍然显示「距下一站」的距离（它只服务向导）
         dlg_text = "未加载路线"
+        dist = self._route_distance_m()
         if self.active_route and 0 <= self.waypoint < len(self.active_route.steps):
-            dist = self.overlay.next_distance_m()
             if dist is None:
                 dlg_text = "下一站：等待定位"
             elif dist < 20:
@@ -1349,7 +1376,7 @@ class MainWindow(QMainWindow):
         if dlg is not None:
             dlg.set_position_status(dlg_text)
 
-        # 悬浮窗顶部只讲定位状态 + 列表，不再抢「下一站」那套
+        # 悬浮窗顶部只讲定位状态 + 列表；下一站带正确距离，避免旧像素比例误差
         if self.canvas._player:
             text = "已手动定位" if self.canvas._player_src == "manual" else "位置已获取"
             if self.canvas._player_rot is None:
@@ -1359,6 +1386,8 @@ class MainWindow(QMainWindow):
             text = "未定位 · 按地图中心起算"
         if self.active_route and 0 <= self.waypoint < len(self.active_route.steps):
             text += f" · 下一站 {self.waypoint + 1}/{len(self.active_route.steps)}"
+            if dist is not None:
+                text += f"（约 {dist:.0f} m）"
         self.overlay.set_status(text)
         self._refresh_overlay_list()
 
@@ -1387,16 +1416,19 @@ class MainWindow(QMainWindow):
                 count = 5
             for dist, point in candidates[:min(12, max(3, count))]:
                 layer = self.layer_map.get(point.layer)
-                bearing, _used_facing = relative_bearing(origin, (point.x, point.y),
-                                                         bbox=bbox, facing=facing)
+                bear = (None if dist < 1.0 else
+                        relative_bearing(origin, (point.x, point.y),
+                                         bbox=bbox, facing=facing)[0])
+                floor = floor_label(point_floor(point))
+                layer_text = layer.label if layer is not None else point.layer
                 rows.append({
                     "id": point.id,
                     "name": point.name,
                     "dist_m": dist,
-                    "layer": layer.label if layer is not None else point.layer,
+                    "layer": f"{layer_text} · {floor}",
                     "color": getattr(layer, "color", None) if layer is not None else None,
                     # 未定位时不画箭头：按地图中心算出来的方向没有意义
-                    "bearing": None if unlocated else bearing,
+                    "bearing": None if (unlocated or bear is None) else bear,
                 })
         self.overlay.set_unlocated(unlocated)
         self.overlay.set_items(rows)
@@ -1710,6 +1742,8 @@ class MainWindow(QMainWindow):
             self._notify("部分全局快捷键注册失败：\n" + "\n".join(
                 f"· {k}：{v}" for k, v in changes["hotkey_failed"].items()), warn=True, details=True)
         self._update_vision_status()
+        if getattr(self, "overlay", None) is not None:
+            self._update_overlay_status()
 
     def _notify(self, text: str, warn: bool = False, details: bool = False) -> None:
         self.status.setText(text[:220])

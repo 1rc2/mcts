@@ -213,6 +213,8 @@ class OfficialMapDialog(QDialog):
     show_main_requested = Signal()
     hide_main_requested = Signal()
     guide_requested = Signal()
+    overlay_toggled = Signal(bool)
+    map_pack_selected = Signal(str)
 
     def __init__(self, parent=None, state: str = "", pack=None):
         super().__init__(parent)
@@ -240,6 +242,7 @@ class OfficialMapDialog(QDialog):
         lay.setSpacing(6)
 
         row = QHBoxLayout()
+        row.addWidget(QLabel("官方地区", self))
         self.combo = QComboBox(self)
         for st, name in OFFICIAL_MAPS:
             self.combo.addItem(name, st)
@@ -254,6 +257,14 @@ class OfficialMapDialog(QDialog):
         btn_min.clicked.connect(self.showMinimized)
         row.addWidget(btn_min)
         lay.addLayout(row)
+
+        row_pack = QHBoxLayout()
+        row_pack.addWidget(QLabel("本机地图", self))
+        self.pack_combo = QComboBox(self)
+        self.pack_combo.setToolTip("决定浮窗/向导使用的离线点位包；官方地区切换只影响官方页面")
+        self.pack_combo.currentIndexChanged.connect(self._on_pack_changed)
+        row_pack.addWidget(self.pack_combo, 1)
+        lay.addLayout(row_pack)
 
         row2 = QHBoxLayout()
         btn_guide = QPushButton("向导", self)
@@ -292,6 +303,10 @@ class OfficialMapDialog(QDialog):
         lay.addLayout(row2)
 
         row3 = QHBoxLayout()
+        self.cb_overlay = QCheckBox("浮窗", self)
+        self.cb_overlay.setToolTip("开启左下角未探索点位浮窗；Ctrl+Alt+K 切换鼠标穿透/可点击")
+        self.cb_overlay.toggled.connect(self.overlay_toggled.emit)
+        row3.addWidget(self.cb_overlay)
         self.cb_sync = QCheckBox("显示我的位置", self)
         self.cb_sync.setChecked(True)
         self.cb_sync.setToolTip("只在官方地面世界（state 8）生效；需要先开启识图或手动定位")
@@ -387,6 +402,25 @@ class OfficialMapDialog(QDialog):
             self.resize(max(1520, self.width()), max(860, self.height()))
         else:
             self.resize(1280, 860)
+
+    def set_map_packs(self, packs, current_key: str = "") -> None:
+        self.pack_combo.blockSignals(True)
+        self.pack_combo.clear()
+        for key, name in packs or []:
+            self.pack_combo.addItem(name, key)
+        idx = self.pack_combo.findData(current_key)
+        self.pack_combo.setCurrentIndex(idx if idx >= 0 else 0)
+        self.pack_combo.blockSignals(False)
+
+    def _on_pack_changed(self, index: int) -> None:
+        key = self.pack_combo.itemData(index)
+        if key:
+            self.map_pack_selected.emit(str(key))
+
+    def set_overlay_state(self, on: bool) -> None:
+        self.cb_overlay.blockSignals(True)
+        self.cb_overlay.setChecked(bool(on))
+        self.cb_overlay.blockSignals(False)
 
     def set_vision_state(self, on: bool) -> None:
         self.cb_detect.blockSignals(True)

@@ -155,6 +155,8 @@ def relative_bearing(origin: tuple[float, float], target: tuple[float, float],
     else:
         dx = float(target[0]) - float(origin[0])
         dy = float(target[1]) - float(origin[1])
+    if abs(dx) < 1e-12 and abs(dy) < 1e-12:
+        return 0.0, facing is not None
     # 屏幕 y 向下，正北是 -y：atan2(dx, -dy) 正好是 0=上、顺时针
     north = math.degrees(math.atan2(dx, -dy)) % 360.0
     if facing is None:

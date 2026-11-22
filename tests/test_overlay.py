@@ -52,6 +52,13 @@ def test_relative_bearing_rotates_with_facing():
                             facing=0)[0] == pytest.approx(90)
 
 
+def test_relative_bearing_zero_distance_is_north_not_down():
+    ang, used = relative_bearing((0.5, 0.5), (0.5, 0.5), facing=0)
+    assert used is True and ang == pytest.approx(0)
+    ang, used = relative_bearing((0.5, 0.5), (0.5, 0.5))
+    assert used is False and ang == pytest.approx(0)
+
+
 def test_relative_bearing_falls_back_to_north_without_facing():
     ang, used = relative_bearing((0.5, 0.5), (0.5, 0.4))
     assert used is False and ang == pytest.approx(0)

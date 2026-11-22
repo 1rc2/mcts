@@ -97,6 +97,8 @@ class OverlayHUD(QWidget):
             w, h = 300, 300
         self.setFixedSize(min(self.MAX_W, max(self.MIN_W, w)),
                           min(self.MAX_H, max(self.MIN_H, h)))
+        if self.isVisible():
+            self._place_default()
         self.update()
 
     def set_opacity(self, value: float) -> None:
