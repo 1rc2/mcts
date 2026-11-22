@@ -1,0 +1,36 @@
+# UTF-8
+#
+# PyInstaller 版本信息文件（VSVersionInfo 文本格式）。
+# 由 packaging/kumap.spec 里的 version=... 引用；改完直接重新打包即可生效。
+# 右键 exe -> 属性 -> 详细信息 就是下面这些字段。
+#
+# 需要改的占位：CompanyName（发布者/公司名）。
+# 与程序内版本保持一致：src/kumap/__init__.py 的 __version__ = "0.1.0"。
+
+VSVersionInfo(
+  ffi=FixedFileInfo(
+    filevers=(0, 1, 0, 0),
+    prodvers=(0, 1, 0, 0),
+    mask=0x3f,
+    flags=0x0,
+    OS=0x40004,
+    fileType=0x1,
+    subtype=0x0,
+    date=(0, 0),
+  ),
+  kids=[
+    StringFileInfo([
+      StringTable('080404b0', [
+        StringStruct('CompanyName', 'TODO-填发布者名称'),
+        StringStruct('FileDescription', '库街区探索助手 · 鸣潮大地图探索参考辅助工具（只展示公开数据、只记录本人标记）'),
+        StringStruct('FileVersion', '0.1.0.0'),
+        StringStruct('InternalName', 'KuroMapHelper'),
+        StringStruct('LegalCopyright', '仅供个人学习研究使用'),
+        StringStruct('OriginalFilename', 'KuroMapHelper.exe'),
+        StringStruct('ProductName', '库街区探索助手'),
+        StringStruct('ProductVersion', '0.1.0.0'),
+      ])
+    ]),
+    VarFileInfo([VarStruct('Translation', [2052, 1200])])
+  ]
+)

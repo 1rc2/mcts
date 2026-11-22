@@ -1,0 +1,42 @@
+# ============================================================================
+# KuroMapHelper - dev / test / packaging dependencies
+#
+# Install: pip install -r requirements-dev.txt
+# This file includes the runtime requirements, so requirements.txt is not
+# needed separately.
+#
+# NOTE: keep this file pure ASCII. Old pip versions decode requirements files
+# with the system locale (e.g. GBK on Chinese Windows) and fail on UTF-8 text.
+# ============================================================================
+
+-r requirements.txt
+
+# ----------------------------------------------------------------------------
+# [test] used by tests/test_recognizer.py and the rest of the test suite
+# ----------------------------------------------------------------------------
+pytest>=8
+
+# ----------------------------------------------------------------------------
+# [packaging] used by build_windows.bat / packaging/kumap.spec
+# equivalent command: pyinstaller packaging\kumap.spec --noconfirm
+# ----------------------------------------------------------------------------
+pyinstaller>=6.0
+
+# ----------------------------------------------------------------------------
+# [optional - vision] install these to test screen-vision on a dev machine and
+# to bundle vision into the exe produced by build_windows.bat.
+# Without them, the exe only supports manual positioning (graceful fallback).
+# ----------------------------------------------------------------------------
+opencv-python>=4.9
+numpy>=1.26
+mss>=9
+
+# ----------------------------------------------------------------------------
+# [optional - asset generation] only for tools/gen_placeholder_map.py
+# ----------------------------------------------------------------------------
+Pillow>=10
+
+# ----------------------------------------------------------------------------
+# [optional - non-Windows dev] credential encryption fallback
+# ----------------------------------------------------------------------------
+# cryptography>=42

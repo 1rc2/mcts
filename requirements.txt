@@ -1,0 +1,39 @@
+# ============================================================================
+# KuroMapHelper - runtime dependencies
+#
+# Install: pip install -r requirements.txt
+#          (On Windows, run run_dev.bat; it installs into .venv automatically)
+# Env: Windows 10/11 + Python 3.10 or newer (3.12 recommended)
+#
+# Two groups:
+#   [required] the app cannot start without it
+#   [optional] only needed by screen-vision positioning
+#
+# NOTE: keep this file pure ASCII. Old pip versions decode requirements files
+# with the system locale (e.g. GBK on Chinese Windows) and fail on UTF-8 text.
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# [required] GUI toolkit (Qt6): UI, tray icon, loopback OAuth callback.
+# ----------------------------------------------------------------------------
+PySide6>=6.6
+
+# ----------------------------------------------------------------------------
+# [optional] Screen-vision positioning: map feature matching + screen capture.
+#
+# Commented out by default. Without them the app still starts and every other
+# feature works; the vision toggle is disabled and the side panel shows a hint.
+# To enable, uncomment the three lines below or install manually:
+#     pip install "opencv-python>=4.9" "numpy>=1.26" "mss>=9"
+# To bundle vision support into the exe, install requirements-dev.txt instead.
+# ----------------------------------------------------------------------------
+# opencv-python>=4.9
+# numpy>=1.26
+# mss>=9
+
+# ----------------------------------------------------------------------------
+# [optional, non-Windows dev only] Local credential encryption fallback.
+# Windows uses DPAPI via crypt32 (no third-party package needed). Only needed
+# when debugging login/token code on Linux/macOS:
+#     pip install "cryptography>=42"
+# ----------------------------------------------------------------------------

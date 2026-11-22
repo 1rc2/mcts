@@ -1,0 +1,1122 @@
+{
+ "schema_version": 1,
+ "source": "sample",
+ "disclaimer": "示例路线：由示例点位串联而成，仅演示顺序导航与轨迹可视化。",
+ "routes": [
+  {
+   "id": "route_r1_chest_sweep",
+   "name": "荒石坡全清·宝箱一轮",
+   "author": "漂泊者示例",
+   "description": "从中枢信标出发，清完北崖与碎石河湾一带宝箱，末段顺手采集植珀与珍珠草。",
+   "tags": [
+    "开荒",
+    "宝箱"
+   ],
+   "est_minutes": 52,
+   "region_ids": [
+    "r2",
+    "r1"
+   ],
+   "steps": [
+    {
+     "seq": 1,
+     "point_id": "anchor_0007",
+     "label": "解锁锚点",
+     "note": "走下层的石阶"
+    },
+    {
+     "seq": 2,
+     "point_id": "chest_0034",
+     "label": "清点物资箱",
+     "note": "必拿"
+    },
+    {
+     "seq": 3,
+     "point_id": "chest_0033",
+     "label": "落地清点",
+     "note": "先开视野"
+    },
+    {
+     "seq": 4,
+     "point_id": "chest_0035",
+     "label": "开奇藏箱",
+     "note": "等刷新再来"
+    },
+    {
+     "seq": 5,
+     "point_id": "chest_0032",
+     "label": "补漏箱体",
+     "note": "可跳过但别漏"
+    },
+    {
+     "seq": 6,
+     "point_id": "chest_0026",
+     "label": "清点物资箱",
+     "note": "绕到背面更近"
+    },
+    {
+     "seq": 7,
+     "point_id": "chest_0021",
+     "label": "落地清点",
+     "note": "等刷新再来"
+    },
+    {
+     "seq": 8,
+     "point_id": "chest_0020",
+     "label": "开奇藏箱",
+     "note": "注意落石"
+    },
+    {
+     "seq": 9,
+     "point_id": "chest_0025",
+     "label": "补漏箱体",
+     "note": "必拿"
+    },
+    {
+     "seq": 10,
+     "point_id": "chest_0030",
+     "label": "清点物资箱",
+     "note": "先开视野"
+    },
+    {
+     "seq": 11,
+     "point_id": "chest_0027",
+     "label": "落地清点",
+     "note": "别拖到夜里"
+    },
+    {
+     "seq": 12,
+     "point_id": "chest_0028",
+     "label": "开奇藏箱",
+     "note": "别拖到夜里"
+    },
+    {
+     "seq": 13,
+     "point_id": "chest_0031",
+     "label": "补漏箱体",
+     "note": "留够体力"
+    },
+    {
+     "seq": 14,
+     "point_id": "material_0013",
+     "label": "收一遍采集点",
+     "note": "绕到背面更近"
+    },
+    {
+     "seq": 15,
+     "point_id": "chest_0023",
+     "label": "落地清点",
+     "note": "从这里跳水更快"
+    },
+    {
+     "seq": 16,
+     "point_id": "chest_0024",
+     "label": "开奇藏箱",
+     "note": "向东北贴崖走"
+    },
+    {
+     "seq": 17,
+     "point_id": "material_0014",
+     "label": "采集矿石",
+     "note": "带够复苏剂"
+    },
+    {
+     "seq": 18,
+     "point_id": "puzzle_0006",
+     "label": "校准机关",
+     "note": "先开视野"
+    },
+    {
+     "seq": 19,
+     "point_id": "chest_0022",
+     "label": "落地清点",
+     "note": "别拖到夜里"
+    },
+    {
+     "seq": 20,
+     "point_id": "chest_0029",
+     "label": "开奇藏箱",
+     "note": "沿水边"
+    },
+    {
+     "seq": 21,
+     "point_id": "material_0016",
+     "label": "采集矿石",
+     "note": "等刷新再来"
+    },
+    {
+     "seq": 22,
+     "point_id": "material_0010",
+     "label": "收一遍采集点",
+     "note": "留够体力"
+    },
+    {
+     "seq": 23,
+     "point_id": "puzzle_0003",
+     "label": "解谜取箱",
+     "note": "带够复苏剂"
+    },
+    {
+     "seq": 24,
+     "point_id": "chest_0012",
+     "label": "开奇藏箱",
+     "note": "向东北贴崖走"
+    }
+   ]
+  },
+  {
+   "id": "route_pearl_grass_loop",
+   "name": "珍珠草·清芬草采集环线",
+   "author": "采药的秧秧",
+   "description": "以采集为主的两区环线，单日一轮可囤够凉茶与合成材料，末段回锚点交料。",
+   "tags": [
+    "采集",
+    "日常"
+   ],
+   "est_minutes": 40,
+   "region_ids": [
+    "r7",
+    "r2"
+   ],
+   "steps": [
+    {
+     "seq": 1,
+     "point_id": "anchor_0022",
+     "label": "点亮信标",
+     "note": "用冲刺拉近距离"
+    },
+    {
+     "seq": 2,
+     "point_id": "material_0076",
+     "label": "顺路采集",
+     "note": "先开视野"
+    },
+    {
+     "seq": 3,
+     "point_id": "material_0077",
+     "label": "补一波药材",
+     "note": "用冲刺拉近距离"
+    },
+    {
+     "seq": 4,
+     "point_id": "material_0021",
+     "label": "采集矿石",
+     "note": "沿水边"
+    },
+    {
+     "seq": 5,
+     "point_id": "material_0012",
+     "label": "收一遍采集点",
+     "note": "带够复苏剂"
+    },
+    {
+     "seq": 6,
+     "point_id": "material_0014",
+     "label": "顺路采集",
+     "note": "走下层的石阶"
+    },
+    {
+     "seq": 7,
+     "point_id": "material_0017",
+     "label": "补一波药材",
+     "note": "可跳过但别漏"
+    },
+    {
+     "seq": 8,
+     "point_id": "chest_0032",
+     "label": "补漏箱体",
+     "note": "从这里跳水更快"
+    },
+    {
+     "seq": 9,
+     "point_id": "material_0020",
+     "label": "收一遍采集点",
+     "note": "从这里跳水更快"
+    },
+    {
+     "seq": 10,
+     "point_id": "material_0018",
+     "label": "顺路采集",
+     "note": "带够复苏剂"
+    },
+    {
+     "seq": 11,
+     "point_id": "material_0015",
+     "label": "补一波药材",
+     "note": "走下层的石阶"
+    },
+    {
+     "seq": 12,
+     "point_id": "quest_0006",
+     "label": "跟完剧情",
+     "note": "用冲刺拉近距离"
+    },
+    {
+     "seq": 13,
+     "point_id": "material_0016",
+     "label": "收一遍采集点",
+     "note": "向东北贴崖走"
+    },
+    {
+     "seq": 14,
+     "point_id": "material_0019",
+     "label": "顺路采集",
+     "note": "走下层的石阶"
+    },
+    {
+     "seq": 15,
+     "point_id": "material_0013",
+     "label": "补一波药材",
+     "note": "等刷新再来"
+    },
+    {
+     "seq": 16,
+     "point_id": "material_0010",
+     "label": "采集矿石",
+     "note": "向东北贴崖走"
+    },
+    {
+     "seq": 17,
+     "point_id": "chest_0027",
+     "label": "清点物资箱",
+     "note": "带够复苏剂"
+    },
+    {
+     "seq": 18,
+     "point_id": "chest_0031",
+     "label": "落地清点",
+     "note": "必拿"
+    },
+    {
+     "seq": 19,
+     "point_id": "chest_0030",
+     "label": "开奇藏箱",
+     "note": "从这里跳水更快"
+    },
+    {
+     "seq": 20,
+     "point_id": "chest_0026",
+     "label": "补漏箱体",
+     "note": "沿水边"
+    },
+    {
+     "seq": 21,
+     "point_id": "material_0011",
+     "label": "收一遍采集点",
+     "note": "从这里跳水更快"
+    },
+    {
+     "seq": 22,
+     "point_id": "chest_0020",
+     "label": "落地清点",
+     "note": "带够复苏剂"
+    },
+    {
+     "seq": 23,
+     "point_id": "chest_0022",
+     "label": "开奇藏箱",
+     "note": "可跳过但别漏"
+    },
+    {
+     "seq": 24,
+     "point_id": "chest_0034",
+     "label": "补漏箱体",
+     "note": "带够复苏剂"
+    },
+    {
+     "seq": 25,
+     "point_id": "chest_0035",
+     "label": "清点物资箱",
+     "note": "留够体力"
+    },
+    {
+     "seq": 26,
+     "point_id": "chest_0033",
+     "label": "落地清点",
+     "note": "注意落石"
+    }
+   ]
+  },
+  {
+   "id": "route_echo_hunting",
+   "name": "声骸巡回·残象巢点串",
+   "author": "声骸收藏癖",
+   "description": "沿虎口山脉与回音峡串联野外声骸，先打高 COST，漏掉的箱子随手补。",
+   "tags": [
+    "声骸",
+    "战斗"
+   ],
+   "est_minutes": 65,
+   "region_ids": [
+    "r3",
+    "r7"
+   ],
+   "steps": [
+    {
+     "seq": 1,
+     "point_id": "anchor_0010",
+     "label": "点亮信标",
+     "note": "等刷新再来"
+    },
+    {
+     "seq": 2,
+     "point_id": "echo_0018",
+     "label": "捕捉声骸",
+     "note": "注意落石"
+    },
+    {
+     "seq": 3,
+     "point_id": "material_0033",
+     "label": "采集矿石",
+     "note": "注意落石"
+    },
+    {
+     "seq": 4,
+     "point_id": "echo_0016",
+     "label": "清理声骸巢",
+     "note": "等刷新再来"
+    },
+    {
+     "seq": 5,
+     "point_id": "echo_0017",
+     "label": "捕捉声骸",
+     "note": "走下层的石阶"
+    },
+    {
+     "seq": 6,
+     "point_id": "echo_0019",
+     "label": "打完残象取声骸",
+     "note": "接锚点收尾"
+    },
+    {
+     "seq": 7,
+     "point_id": "material_0034",
+     "label": "采集矿石",
+     "note": "走下层的石阶"
+    },
+    {
+     "seq": 8,
+     "point_id": "chest_0046",
+     "label": "清点物资箱",
+     "note": "走下层的石阶"
+    },
+    {
+     "seq": 9,
+     "point_id": "chest_0045",
+     "label": "落地清点",
+     "note": "沿水边"
+    },
+    {
+     "seq": 10,
+     "point_id": "echo_0041",
+     "label": "清理声骸巢",
+     "note": "绕到背面更近"
+    },
+    {
+     "seq": 11,
+     "point_id": "echo_0040",
+     "label": "捕捉声骸",
+     "note": "用冲刺拉近距离"
+    },
+    {
+     "seq": 12,
+     "point_id": "echo_0042",
+     "label": "打完残象取声骸",
+     "note": "等刷新再来"
+    },
+    {
+     "seq": 13,
+     "point_id": "echo_0039",
+     "label": "清理声骸巢",
+     "note": "注意落石"
+    },
+    {
+     "seq": 14,
+     "point_id": "chest_0102",
+     "label": "开奇藏箱",
+     "note": "别拖到夜里"
+    },
+    {
+     "seq": 15,
+     "point_id": "chest_0096",
+     "label": "补漏箱体",
+     "note": "可跳过但别漏"
+    },
+    {
+     "seq": 16,
+     "point_id": "echo_0038",
+     "label": "清理声骸巢",
+     "note": "必拿"
+    },
+    {
+     "seq": 17,
+     "point_id": "echo_0037",
+     "label": "捕捉声骸",
+     "note": "带够复苏剂"
+    },
+    {
+     "seq": 18,
+     "point_id": "chest_0091",
+     "label": "开奇藏箱",
+     "note": "可跳过但别漏"
+    },
+    {
+     "seq": 19,
+     "point_id": "chest_0090",
+     "label": "补漏箱体",
+     "note": "走下层的石阶"
+    },
+    {
+     "seq": 20,
+     "point_id": "chest_0042",
+     "label": "清点物资箱",
+     "note": "带够复苏剂"
+    },
+    {
+     "seq": 21,
+     "point_id": "chest_0044",
+     "label": "落地清点",
+     "note": "必拿"
+    },
+    {
+     "seq": 22,
+     "point_id": "chest_0047",
+     "label": "开奇藏箱",
+     "note": "从这里跳水更快"
+    }
+   ]
+  },
+  {
+   "id": "route_puzzle_chain",
+   "name": "解谜串联·方碑与灯偶",
+   "author": "强迫症清图办",
+   "description": "专治遗留解谜：共鸣方碑、四色灯偶一轮走完，个别点位需要等刷新。",
+   "tags": [
+    "解谜",
+    "清空"
+   ],
+   "est_minutes": 48,
+   "region_ids": [
+    "r6",
+    "r7",
+    "r5"
+   ],
+   "steps": [
+    {
+     "seq": 1,
+     "point_id": "anchor_0019",
+     "label": "点亮信标",
+     "note": "绕到背面更近"
+    },
+    {
+     "seq": 2,
+     "point_id": "puzzle_0020",
+     "label": "校准机关",
+     "note": "接锚点收尾"
+    },
+    {
+     "seq": 3,
+     "point_id": "puzzle_0021",
+     "label": "触发谜题",
+     "note": "先开视野"
+    },
+    {
+     "seq": 4,
+     "point_id": "puzzle_0022",
+     "label": "解谜取箱",
+     "note": "用冲刺拉近距离"
+    },
+    {
+     "seq": 5,
+     "point_id": "chest_0091",
+     "label": "清点物资箱",
+     "note": "从这里跳水更快"
+    },
+    {
+     "seq": 6,
+     "point_id": "chest_0085",
+     "label": "落地清点",
+     "note": "先开视野"
+    },
+    {
+     "seq": 7,
+     "point_id": "material_0067",
+     "label": "补一波药材",
+     "note": "注意落石"
+    },
+    {
+     "seq": 8,
+     "point_id": "puzzle_0018",
+     "label": "校准机关",
+     "note": "用冲刺拉近距离"
+    },
+    {
+     "seq": 9,
+     "point_id": "chest_0082",
+     "label": "清点物资箱",
+     "note": "接锚点收尾"
+    },
+    {
+     "seq": 10,
+     "point_id": "chest_0081",
+     "label": "落地清点",
+     "note": "等刷新再来"
+    },
+    {
+     "seq": 11,
+     "point_id": "chest_0089",
+     "label": "开奇藏箱",
+     "note": "必拿"
+    },
+    {
+     "seq": 12,
+     "point_id": "chest_0087",
+     "label": "补漏箱体",
+     "note": "接锚点收尾"
+    },
+    {
+     "seq": 13,
+     "point_id": "puzzle_0019",
+     "label": "解谜取箱",
+     "note": "注意落石"
+    },
+    {
+     "seq": 14,
+     "point_id": "chest_0080",
+     "label": "落地清点",
+     "note": "必拿"
+    },
+    {
+     "seq": 15,
+     "point_id": "puzzle_0017",
+     "label": "触发谜题",
+     "note": "走下层的石阶"
+    },
+    {
+     "seq": 16,
+     "point_id": "material_0057",
+     "label": "采集矿石",
+     "note": "带够复苏剂"
+    }
+   ]
+  },
+  {
+   "id": "route_quest_line",
+   "name": "纪闻任务推进线",
+   "author": "跟着剧情走",
+   "description": "以任务点为节点串起今州城郊与残息海岸，任务点位稀疏，沿途顺手补解谜与宝箱。",
+   "tags": [
+    "任务",
+    "剧情"
+   ],
+   "est_minutes": 70,
+   "region_ids": [
+    "r4",
+    "r8"
+   ],
+   "steps": [
+    {
+     "seq": 1,
+     "point_id": "anchor_0013",
+     "label": "解锁锚点",
+     "note": "带够复苏剂"
+    },
+    {
+     "seq": 2,
+     "point_id": "quest_0009",
+     "label": "推进任务",
+     "note": "带够复苏剂"
+    },
+    {
+     "seq": 3,
+     "point_id": "material_0038",
+     "label": "顺路采集",
+     "note": "必拿"
+    },
+    {
+     "seq": 4,
+     "point_id": "echo_0020",
+     "label": "打完残象取声骸",
+     "note": "别拖到夜里"
+    },
+    {
+     "seq": 5,
+     "point_id": "material_0041",
+     "label": "采集矿石",
+     "note": "注意落石"
+    },
+    {
+     "seq": 6,
+     "point_id": "chest_0059",
+     "label": "清点物资箱",
+     "note": "等刷新再来"
+    },
+    {
+     "seq": 7,
+     "point_id": "quest_0011",
+     "label": "跟完剧情",
+     "note": "带够复苏剂"
+    },
+    {
+     "seq": 8,
+     "point_id": "puzzle_0012",
+     "label": "解谜取箱",
+     "note": "从这里跳水更快"
+    },
+    {
+     "seq": 9,
+     "point_id": "quest_0010",
+     "label": "交接告示",
+     "note": "先开视野"
+    },
+    {
+     "seq": 10,
+     "point_id": "puzzle_0013",
+     "label": "触发谜题",
+     "note": "可跳过但别漏"
+    },
+    {
+     "seq": 11,
+     "point_id": "puzzle_0011",
+     "label": "解谜取箱",
+     "note": "留够体力"
+    },
+    {
+     "seq": 12,
+     "point_id": "material_0094",
+     "label": "补一波药材",
+     "note": "先开视野"
+    }
+   ]
+  },
+  {
+   "id": "route_anchor_express",
+   "name": "信标快速点亮线",
+   "author": "开图快递小哥",
+   "description": "把青栎庭院与乘霄山的信标串成一条点亮线，中间用宝箱点当跳板省体力。",
+   "tags": [
+    "开荒",
+    "锚点"
+   ],
+   "est_minutes": 35,
+   "region_ids": [
+    "r5",
+    "r6"
+   ],
+   "steps": [
+    {
+     "seq": 1,
+     "point_id": "anchor_0017",
+     "label": "点亮信标",
+     "note": "留够体力"
+    },
+    {
+     "seq": 2,
+     "point_id": "chest_0076",
+     "label": "落地清点",
+     "note": "留够体力"
+    },
+    {
+     "seq": 3,
+     "point_id": "chest_0078",
+     "label": "开奇藏箱",
+     "note": "绕到背面更近"
+    },
+    {
+     "seq": 4,
+     "point_id": "chest_0077",
+     "label": "补漏箱体",
+     "note": "走下层的石阶"
+    },
+    {
+     "seq": 5,
+     "point_id": "chest_0070",
+     "label": "清点物资箱",
+     "note": "顺路即可"
+    },
+    {
+     "seq": 6,
+     "point_id": "chest_0075",
+     "label": "落地清点",
+     "note": "绕到背面更近"
+    },
+    {
+     "seq": 7,
+     "point_id": "chest_0080",
+     "label": "开奇藏箱",
+     "note": "向东北贴崖走"
+    },
+    {
+     "seq": 8,
+     "point_id": "echo_0035",
+     "label": "捕捉声骸",
+     "note": "带够复苏剂"
+    },
+    {
+     "seq": 9,
+     "point_id": "anchor_0021",
+     "label": "解锁锚点",
+     "note": "等刷新再来"
+    },
+    {
+     "seq": 10,
+     "point_id": "material_0062",
+     "label": "顺路采集",
+     "note": "顺路即可"
+    },
+    {
+     "seq": 11,
+     "point_id": "anchor_0019",
+     "label": "确认传送点",
+     "note": "带够复苏剂"
+    },
+    {
+     "seq": 12,
+     "point_id": "chest_0085",
+     "label": "补漏箱体",
+     "note": "向东北贴崖走"
+    },
+    {
+     "seq": 13,
+     "point_id": "chest_0086",
+     "label": "清点物资箱",
+     "note": "注意落石"
+    },
+    {
+     "seq": 14,
+     "point_id": "chest_0087",
+     "label": "落地清点",
+     "note": "沿水边"
+    },
+    {
+     "seq": 15,
+     "point_id": "chest_0084",
+     "label": "开奇藏箱",
+     "note": "接锚点收尾"
+    }
+   ]
+  },
+  {
+   "id": "route_coast_chest",
+   "name": "残息海岸·礁盘宝箱清空",
+   "author": "海雾里的漂泊者",
+   "description": "退潮时段走完礁盘与沉船骨架，采集段集中在紫珊瑚与锦色贝的富集带。",
+   "tags": [
+    "宝箱",
+    "采集"
+   ],
+   "est_minutes": 44,
+   "region_ids": [
+    "r4"
+   ],
+   "steps": [
+    {
+     "seq": 1,
+     "point_id": "anchor_0015",
+     "label": "解锁锚点",
+     "note": "可跳过但别漏"
+    },
+    {
+     "seq": 2,
+     "point_id": "chest_0060",
+     "label": "清点物资箱",
+     "note": "留够体力"
+    },
+    {
+     "seq": 3,
+     "point_id": "chest_0063",
+     "label": "落地清点",
+     "note": "等刷新再来"
+    },
+    {
+     "seq": 4,
+     "point_id": "chest_0064",
+     "label": "开奇藏箱",
+     "note": "沿水边"
+    },
+    {
+     "seq": 5,
+     "point_id": "chest_0057",
+     "label": "补漏箱体",
+     "note": "走下层的石阶"
+    },
+    {
+     "seq": 6,
+     "point_id": "chest_0061",
+     "label": "清点物资箱",
+     "note": "向东北贴崖走"
+    },
+    {
+     "seq": 7,
+     "point_id": "chest_0062",
+     "label": "落地清点",
+     "note": "可跳过但别漏"
+    },
+    {
+     "seq": 8,
+     "point_id": "chest_0059",
+     "label": "开奇藏箱",
+     "note": "先开视野"
+    },
+    {
+     "seq": 9,
+     "point_id": "chest_0055",
+     "label": "补漏箱体",
+     "note": "沿水边"
+    },
+    {
+     "seq": 10,
+     "point_id": "chest_0048",
+     "label": "清点物资箱",
+     "note": "绕到背面更近"
+    },
+    {
+     "seq": 11,
+     "point_id": "chest_0054",
+     "label": "落地清点",
+     "note": "等刷新再来"
+    },
+    {
+     "seq": 12,
+     "point_id": "chest_0049",
+     "label": "开奇藏箱",
+     "note": "可跳过但别漏"
+    },
+    {
+     "seq": 13,
+     "point_id": "chest_0050",
+     "label": "补漏箱体",
+     "note": "必拿"
+    },
+    {
+     "seq": 14,
+     "point_id": "chest_0056",
+     "label": "清点物资箱",
+     "note": "别拖到夜里"
+    },
+    {
+     "seq": 15,
+     "point_id": "chest_0058",
+     "label": "落地清点",
+     "note": "可跳过但别漏"
+    },
+    {
+     "seq": 16,
+     "point_id": "material_0043",
+     "label": "补一波药材",
+     "note": "接锚点收尾"
+    },
+    {
+     "seq": 17,
+     "point_id": "material_0042",
+     "label": "采集矿石",
+     "note": "从这里跳水更快"
+    },
+    {
+     "seq": 18,
+     "point_id": "chest_0051",
+     "label": "清点物资箱",
+     "note": "带够复苏剂"
+    },
+    {
+     "seq": 19,
+     "point_id": "chest_0053",
+     "label": "落地清点",
+     "note": "注意落石"
+    },
+    {
+     "seq": 20,
+     "point_id": "chest_0052",
+     "label": "开奇藏箱",
+     "note": "沿水边"
+    }
+   ]
+  },
+  {
+   "id": "route_mountain_mixed",
+   "name": "乘霄山混合全清·银雪莲与声骸",
+   "author": "雪山常驻",
+   "description": "银雪莲采集、声骸巢点与宝箱混排的一条长线，建议分两轮跟走并留返程体力。",
+   "tags": [
+    "综合",
+    "雪山"
+   ],
+   "est_minutes": 96,
+   "region_ids": [
+    "r7",
+    "r6",
+    "r3"
+   ],
+   "steps": [
+    {
+     "seq": 1,
+     "point_id": "anchor_0023",
+     "label": "确认传送点",
+     "note": "顺路即可"
+    },
+    {
+     "seq": 2,
+     "point_id": "material_0075",
+     "label": "采集矿石",
+     "note": "注意落石"
+    },
+    {
+     "seq": 3,
+     "point_id": "material_0065",
+     "label": "收一遍采集点",
+     "note": "留够体力"
+    },
+    {
+     "seq": 4,
+     "point_id": "material_0064",
+     "label": "顺路采集",
+     "note": "别拖到夜里"
+    },
+    {
+     "seq": 5,
+     "point_id": "material_0066",
+     "label": "补一波药材",
+     "note": "向东北贴崖走"
+    },
+    {
+     "seq": 6,
+     "point_id": "material_0070",
+     "label": "采集矿石",
+     "note": "等刷新再来"
+    },
+    {
+     "seq": 7,
+     "point_id": "material_0073",
+     "label": "收一遍采集点",
+     "note": "用冲刺拉近距离"
+    },
+    {
+     "seq": 8,
+     "point_id": "material_0063",
+     "label": "顺路采集",
+     "note": "从这里跳水更快"
+    },
+    {
+     "seq": 9,
+     "point_id": "material_0067",
+     "label": "补一波药材",
+     "note": "顺路即可"
+    },
+    {
+     "seq": 10,
+     "point_id": "material_0068",
+     "label": "采集矿石",
+     "note": "沿水边"
+    },
+    {
+     "seq": 11,
+     "point_id": "chest_0085",
+     "label": "清点物资箱",
+     "note": "别拖到夜里"
+    },
+    {
+     "seq": 12,
+     "point_id": "material_0062",
+     "label": "顺路采集",
+     "note": "注意落石"
+    },
+    {
+     "seq": 13,
+     "point_id": "material_0069",
+     "label": "补一波药材",
+     "note": "绕到背面更近"
+    },
+    {
+     "seq": 14,
+     "point_id": "echo_0035",
+     "label": "打完残象取声骸",
+     "note": "走下层的石阶"
+    },
+    {
+     "seq": 15,
+     "point_id": "echo_0033",
+     "label": "清理声骸巢",
+     "note": "等刷新再来"
+    },
+    {
+     "seq": 16,
+     "point_id": "echo_0032",
+     "label": "捕捉声骸",
+     "note": "必拿"
+    },
+    {
+     "seq": 17,
+     "point_id": "echo_0031",
+     "label": "打完残象取声骸",
+     "note": "走下层的石阶"
+    },
+    {
+     "seq": 18,
+     "point_id": "echo_0030",
+     "label": "清理声骸巢",
+     "note": "别拖到夜里"
+    },
+    {
+     "seq": 19,
+     "point_id": "material_0072",
+     "label": "收一遍采集点",
+     "note": "留够体力"
+    },
+    {
+     "seq": 20,
+     "point_id": "material_0074",
+     "label": "顺路采集",
+     "note": "带够复苏剂"
+    },
+    {
+     "seq": 21,
+     "point_id": "material_0077",
+     "label": "补一波药材",
+     "note": "顺路即可"
+    },
+    {
+     "seq": 22,
+     "point_id": "material_0076",
+     "label": "采集矿石",
+     "note": "沿水边"
+    },
+    {
+     "seq": 23,
+     "point_id": "material_0071",
+     "label": "收一遍采集点",
+     "note": "注意落石"
+    },
+    {
+     "seq": 24,
+     "point_id": "echo_0036",
+     "label": "清理声骸巢",
+     "note": "可跳过但别漏"
+    },
+    {
+     "seq": 25,
+     "point_id": "echo_0037",
+     "label": "捕捉声骸",
+     "note": "先开视野"
+    },
+    {
+     "seq": 26,
+     "point_id": "echo_0038",
+     "label": "打完残象取声骸",
+     "note": "带够复苏剂"
+    },
+    {
+     "seq": 27,
+     "point_id": "chest_0090",
+     "label": "清点物资箱",
+     "note": "别拖到夜里"
+    },
+    {
+     "seq": 28,
+     "point_id": "material_0022",
+     "label": "顺路采集",
+     "note": "从这里跳水更快"
+    }
+   ]
+  }
+ ]
+}
