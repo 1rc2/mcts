@@ -205,6 +205,8 @@ class OfficialMapDialog(QDialog):
     """内嵌官方原始地图；可最小化，位置/路线由本机识图结果驱动。"""
 
     vision_toggled = Signal(bool)
+    vision_calibrate = Signal()
+    vision_probe = Signal()
     prev_waypoint = Signal()
     next_waypoint = Signal()
     complete_waypoint = Signal()
@@ -262,6 +264,14 @@ class OfficialMapDialog(QDialog):
         self.cb_detect.setToolTip("开启/关闭屏幕识图定位；和主窗口的识图开关同步")
         self.cb_detect.toggled.connect(self.vision_toggled.emit)
         row2.addWidget(self.cb_detect)
+        btn_calib = QPushButton("校准小地图", self)
+        btn_calib.setToolTip("在屏幕上框出游戏小地图区域；自动检测失败时用这个")
+        btn_calib.clicked.connect(self.vision_calibrate.emit)
+        row2.addWidget(btn_calib)
+        btn_probe = QPushButton("识图自检", self)
+        btn_probe.setToolTip("立刻识别一次，并把成功坐标或失败原因写在下方")
+        btn_probe.clicked.connect(self.vision_probe.emit)
+        row2.addWidget(btn_probe)
         self.btn_prev = QPushButton("◀ 上一站", self)
         self.btn_prev.clicked.connect(self.prev_waypoint.emit)
         row2.addWidget(self.btn_prev)
@@ -298,6 +308,13 @@ class OfficialMapDialog(QDialog):
         self.pos_status.setObjectName("Disclaimer")
         row3.addWidget(self.pos_status, 1)
         lay.addLayout(row3)
+
+        # 识图过程与失败原因：默认是「只开官方地图」模式，主窗口侧栏看不见，
+        # 这里必须显示，否则用户只知道位置不动，不知道卡在哪一步。
+        self.vision_status = QLabel("识图：等待状态", self)
+        self.vision_status.setObjectName("Disclaimer")
+        self.vision_status.setWordWrap(True)
+        lay.addWidget(self.vision_status)
         for b in (self.btn_prev, self.btn_next, self.btn_done):
             b.setEnabled(False)
 
@@ -378,6 +395,10 @@ class OfficialMapDialog(QDialog):
 
     def set_position_status(self, text: str) -> None:
         self.pos_status.setText("位置：" + (text or "等待识图/手动定位"))
+
+    def set_vision_status(self, text: str) -> None:
+        """显示识图状态/失败原因（含裁片位置、内点数等细节）。"""
+        self.vision_status.setText(text or "识图：等待状态")
 
     def set_player(self, x: float, y: float, rotation=None) -> None:
         self._pos = (float(x), float(y))

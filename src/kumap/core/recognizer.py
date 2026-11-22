@@ -82,6 +82,9 @@ INTERVAL_MIN_MS = 500
 INTERVAL_MAX_MS = 10000
 DEGRADED_INTERVAL_MS = 3000  # 连续失败后的降频下限（省电/省资源）
 DEGRADED_FAIL_STREAK = 3
+# 单帧内试多个候选小地图框的总时间上限：超过就先用目前最可能的失败原因上报，
+# 下一帧继续（宁可这一帧失败，也不要把识别拖到超过 interval）。
+CANDIDATE_TIME_BUDGET = 0.9
 
 ACCURACY_NOTE = "识图定位存在误差，仅作探索参考"
 
@@ -149,10 +152,12 @@ class VisionConfig:
     sensitivity: float = 0.55  # 0~1，越高越严格
     min_inliers: int = 8
     monitor_index: int = SCREEN_PRIMARY
+    smooth: bool = True  # 跨帧平滑 + 跳变拒绝（见 PositionSmoother）
 
     def __post_init__(self) -> None:
         self.enabled = bool(self.enabled)
         self.auto_detect = bool(self.auto_detect)
+        self.smooth = bool(self.smooth)
         self.interval_ms = int(_clamp(float(self.interval_ms), INTERVAL_MIN_MS, INTERVAL_MAX_MS))
         self.sensitivity = float(_clamp(self.sensitivity, 0.0, 1.0))
         self.min_inliers = int(max(3, int(self.min_inliers)))
@@ -190,11 +195,84 @@ class VisionResult:
     accuracy_note: str = ACCURACY_NOTE
     timestamp: float = 0.0
     elapsed_ms: float = 0.0
+    # 失败/成功的过程细节（截了哪块、自动检测结果、内点数等）。
+    # reason 仍是纯原因码供程序分支，detail 只给人看，不要拿来判断逻辑。
+    detail: str = ""
 
     def to_dict(self) -> dict:
         from dataclasses import asdict
 
         return asdict(self)
+
+
+def _detail_join(a: str, b: str) -> str:
+    a = (a or "").strip()
+    return (a + "；" + b) if a else b
+
+
+class PositionSmoother:
+    """跨帧位置平滑：EMA + 跳变拒绝。
+
+    - 正常帧走指数平滑（alpha 默认 0.45），把单帧抖动压到肉眼可忽略；
+    - 位移超过 jump_limit 的帧先挂起，下一帧若落在 confirm_dist 内才认（真的是传送/换层），
+      否则判为误匹配：位置回退到上一次结果、置信度压低并写入 detail。
+    没有历史时直接采纳第一帧，不做延迟。
+    """
+
+    def __init__(self, alpha: float = 0.45, jump_limit: float = 0.08,
+                 confirm_dist: float = 0.04):
+        self.alpha = float(_clamp(alpha, 0.05, 1.0))
+        self.jump_limit = float(_clamp(jump_limit, 0.005, 0.5))
+        self.confirm_dist = float(_clamp(confirm_dist, 0.001, 0.2))
+        self.rejected = 0
+        self.reset()
+
+    def reset(self) -> None:
+        self._pos: Optional[tuple] = None
+        self._rot: Optional[float] = None
+        self._pending: Optional[tuple] = None
+
+    def push(self, res: VisionResult) -> VisionResult:
+        if not res.ok or res.x is None or res.y is None:
+            return res
+        x, y = float(res.x), float(res.y)
+        if self._pos is None:
+            self._pos = (x, y)
+            self._rot = res.rotation
+            self._pending = None
+            return replace(res, detail=_detail_join(res.detail, "smooth:init"))
+
+        px, py = self._pos
+        dist = math.hypot(x - px, y - py)
+        if dist > self.jump_limit:
+            if self._pending is not None and math.hypot(
+                    x - self._pending[0], y - self._pending[1]) <= self.confirm_dist:
+                # 连续两帧落在同一处：接受这次跳变（传送、换层、重开地图）
+                self._pos = (x, y)
+                self._rot = res.rotation if res.rotation is not None else self._rot
+                self._pending = None
+                return replace(res, detail=_detail_join(res.detail, "smooth:jump_confirmed"))
+            self._pending = (x, y)
+            self.rejected += 1
+            return replace(
+                res, x=round(px, 6), y=round(py, 6), rotation=self._rot,
+                confidence=round(min(float(res.confidence or 0.0), 0.3), 4),
+                detail=_detail_join(res.detail, "smooth:跳变已丢弃(保持上次)"))
+
+        a = self.alpha
+        nx = px + a * (x - px)
+        ny = py + a * (y - py)
+        self._pos = (nx, ny)
+        self._pending = None
+        if res.rotation is not None:
+            if self._rot is None:
+                self._rot = res.rotation
+            else:
+                diff = (res.rotation - self._rot + 180.0) % 360.0 - 180.0
+                self._rot = (self._rot + a * diff) % 360.0
+        return replace(res, x=round(nx, 6), y=round(ny, 6),
+                       rotation=None if self._rot is None else round(self._rot, 2),
+                       detail=_detail_join(res.detail, "smooth:ema"))
 
 
 # --------------------------------------------------------------------------- 索引
@@ -400,6 +478,9 @@ class MinimapLocalizer:
         self._sift_matcher = None
         self._orb_mini = None
         self._last_detail = ""
+        # 上一次命中的小地图框：下一帧优先从同一块开始匹配，
+        # 避免每帧都重跑全部候选（自动检测/四角试探只是兜底）。
+        self._last_good_box: Optional[tuple] = None
         self._sync_engine()
 
     # -- 对外只读信息
@@ -434,7 +515,12 @@ class MinimapLocalizer:
 
     def set_config(self, config: VisionConfig) -> None:
         with self._lock:
+            old = self._cfg
             self._cfg = (config or VisionConfig()).cloned()
+            if (old.minimap_rect != self._cfg.minimap_rect
+                    or old.auto_detect != self._cfg.auto_detect):
+                # 区域/检测方式变了，旧命中框不再可信
+                self._last_good_box = None
 
     def update_world_map(self, path: str) -> None:
         """更换底图并重建索引（与 locate 互斥）。"""
@@ -443,6 +529,7 @@ class MinimapLocalizer:
             self._index = MapIndex(path)
             self._index.build()
             self._sift_index = None
+            self._last_good_box = None
             self._sync_engine()
 
     # -- 主流程
@@ -474,34 +561,73 @@ class MinimapLocalizer:
 
         if not self._index.ready:
             self._index.build()
+        # 纯色画面通常意味着独占全屏 / 受保护内容抓不到（GDI 抓出来是黑框），
+        # 这类失败和「小地图没找到」在处理方式上完全不同，得让人一眼看出来。
+        try:
+            flat = float(frame.std()) < 2.0
+        except Exception:
+            flat = False
+        if flat:
+            frame_detail += "；画面几乎纯色（独占全屏或受保护画面常见，建议游戏改无边框窗口化）"
         levels = self._index.levels
         use_sift = max(self._index.size) >= SIFT_ENGINE_MIN_DIM
         if not levels and not use_sift:
             return self._fail(REASON_MAP_INDEX_MISSING, t0,
                               "%s；%s" % (frame_detail, self._index.error or "底图索引未就绪"))
 
-        prep, region_detail, code = self._extract_minimap(frame)
-        trace = "%s；%s" % (frame_detail, region_detail)
-        if prep is None:
-            return self._fail(code or REASON_MINIMAP_NOT_FOUND, t0, trace)
+        # 小地图不一定在「固定的那个方块」里：自动检测可能找不到圆（HUD 遮挡、
+        # 方形小地图、被挪到别的角），此时若死守固定的归一化矩形，裁出来的是
+        # 歪的/不完整的一块，SIFT 内点必然不够——用户看到的就是「识图一直失败」。
+        # 所以这里按优先级逐个候选试：上次命中 → 自动检测圆 → 手动矩形 → 四角方块。
+        best_fail: Optional[tuple] = None
+        tried = 0
+        sift_unavailable = False
+        for box, region_detail in self._candidate_boxes(frame):
+            if time.perf_counter() - t0 > CANDIDATE_TIME_BUDGET:
+                logger.debug("candidate search budget exhausted")
+                break
+            trace = "%s；%s" % (frame_detail, region_detail)
+            tried += 1
+            prep = self._prepare(frame, box)
+            if prep is None:
+                if best_fail is None:
+                    best_fail = (REASON_MINIMAP_NOT_FOUND, trace + "；裁片无有效内容")
+                continue
 
-        # 官方大图以 SIFT 为准：它在实测中没有误报；ORB 在该尺度下可能给出错误位置，
-        # 所以大图上 SIFT 失败就直接上报失败（上层保留上次位置），不再退回 ORB。
-        # 只有 SIFT 本身不可用（未装 OpenCV/SIFT）时才走 ORB。
-        if use_sift:
-            sift_res = self._sift_locate(prep, t0, trace)
-            if sift_res is not None:
-                return sift_res
-        if not levels:
-            return self._fail(REASON_MAP_INDEX_MISSING, t0,
-                              "%s；%s" % (trace, self._index.error or "底图索引未就绪"))
+            # 官方大图以 SIFT 为准：它在实测中没有误报；ORB 在该尺度下可能给出错误位置，
+            # 所以大图上 SIFT 失败就换下一个候选，不退回 ORB。
+            # 只有 SIFT 本身不可用（未装 OpenCV/SIFT）时才走 ORB。
+            if use_sift:
+                sift_res = self._sift_locate(prep, t0, trace)
+                if sift_res is None:
+                    sift_unavailable = True
+                    break  # SIFT 不可用，落到下面的 ORB 分支（只用第一个候选）
+                if sift_res.ok:
+                    self._last_good_box = tuple(int(v) for v in box)
+                    return sift_res
+                if best_fail is None or best_fail[0] == REASON_MINIMAP_NOT_FOUND:
+                    best_fail = (sift_res.reason, sift_res.detail or trace)
+                continue
 
-        best, fail = self._search(prep, levels, cfg)
-        if best is None:
-            return self._fail(fail[0], t0, "%s；%s" % (trace, fail[1]))
-        self._last_detail = "%s；inliers=%d good=%d cov=%d level=%.3f r=%.2f conf=%.3f" % (
-            trace, best["inliers"], best["good"], best["cov"], best["eff"], best["r"], best["conf"])
-        return self._build_result(best, t0)
+            if not levels:
+                return self._fail(REASON_MAP_INDEX_MISSING, t0,
+                                  "%s；%s" % (trace, self._index.error or "底图索引未就绪"))
+            best, fail = self._search(prep, levels, cfg)
+            if best is None:
+                if best_fail is None or best_fail[0] == REASON_MINIMAP_NOT_FOUND:
+                    best_fail = (fail[0], "%s；%s" % (trace, fail[1]))
+                continue
+            self._last_good_box = tuple(int(v) for v in box)
+            self._last_detail = "%s；inliers=%d good=%d cov=%d level=%.3f r=%.2f conf=%.3f" % (
+                trace, best["inliers"], best["good"], best["cov"], best["eff"], best["r"], best["conf"])
+            return self._build_result(best, t0)
+
+        if sift_unavailable:
+            return self._fail(REASON_MAP_INDEX_MISSING, t0, "%s；SIFT 不可用，无法在大底图上匹配" % frame_detail)
+        if best_fail is None:
+            return self._fail(REASON_MINIMAP_NOT_FOUND, t0,
+                              "%s；没有可用的小地图候选区域" % frame_detail)
+        return self._fail(best_fail[0], t0, "%s；已试 %d 个候选区域" % (best_fail[1], tried))
 
     def _sift_locate(self, prep, t0: float, trace: str) -> Optional[VisionResult]:
         """大图定位：SIFT 匹配 + 相似变换。不可用时返回 None（交回 ORB）。"""
@@ -607,6 +733,7 @@ class MinimapLocalizer:
             reason=reason,
             timestamp=time.time(),
             elapsed_ms=(time.perf_counter() - t0) * 1000.0,
+            detail=self._last_detail,
         )
 
     def _as_bgr(self, frame):
@@ -656,43 +783,91 @@ class MinimapLocalizer:
 
     # 小地图区域 ---------------------------------------------------------------
 
-    def _extract_minimap(self, frame):
-        """返回 (prepared dict | None, detail, reason_code)。"""
+    def _configured_box(self, frame):
+        """把配置里的归一化矩形换成屏幕上居中的正方形框，返回 (box, detail) 或 (None, detail)。"""
         h, w = frame.shape[:2]
-        circle = None
-        if self._cfg.auto_detect:
-            circle = self._detect_circle(frame)
+        nx, ny, nw, nh = self._cfg.minimap_rect
+        x0, y0 = int(round(nx * w)), int(round(ny * h))
+        x1, y1 = int(round((nx + nw) * w)), int(round((ny + nh) * h))
+        side = min(x1 - x0, y1 - y0)
+        if side < 24:
+            return None, "minimap_rect 过小: %dx%d" % (x1 - x0, y1 - y0)
+        # 归一化矩形可能非正方形：取居中最大正方形作为圆形小地图外接盒
+        cx, cy = (x0 + x1) // 2, (y0 + y1) // 2
+        return (cx - side // 2, cy - side // 2, cx + side // 2, cy + side // 2), \
+            "fixed rect (%d,%d,%d,%d)" % (x0, y0, x1, y1)
+
+    def _candidate_boxes(self, frame):
+        """按优先级返回候选小地图框 (box, detail)。
+
+        自动检测只能覆盖圆形小地图；方形小地图、被 HUD 盖住、或挪到左下/右下时
+        都会漏检。漏检后如果直接退回那个默认的 0.115×0.115 矩形，裁出来的区域
+        往往比真实小地图小一半，SIFT 内点必然不够。这里补上四角方块做兜底搜索，
+        命中一次后下次优先复用同一块（见 _last_good_box）。
+        """
+        h, w = frame.shape[:2]
+        seen = set()
+        out = []
+
+        def push(box, detail):
+            if box is None:
+                return
+            key = tuple(int(v) for v in box)
+            if key in seen:
+                return
+            seen.add(key)
+            out.append((key, detail))
+
+        # 1) 上次命中：正常情况下每帧只需匹配这一块
+        if self._last_good_box is not None:
+            push(self._last_good_box, "last_good (%d,%d,%d,%d)" % self._last_good_box)
+
+        # 2) 自动检测到的圆形小地图
+        circle = self._detect_circle(frame) if self._cfg.auto_detect else None
         if circle is not None:
             cx, cy, r = circle
-            box = (int(cx - r), int(cy - r), int(cx + r), int(cy + r))
-            detail = "auto_detect circle=(%.0f,%.0f,%.0f)" % (cx, cy, r)
-        else:
-            nx, ny, nw, nh = self._cfg.minimap_rect
-            x0, y0 = int(round(nx * w)), int(round(ny * h))
-            x1, y1 = int(round((nx + nw) * w)), int(round((ny + nh) * h))
-            side = min(x1 - x0, y1 - y0)
-            if side < 24:
-                return None, "minimap_rect 过小: %dx%d" % (x1 - x0, y1 - y0), REASON_MINIMAP_NOT_FOUND
-            # 归一化矩形可能非正方形：取居中最大正方形作为圆形小地图外接盒
-            cx, cy = (x0 + x1) // 2, (y0 + y1) // 2
-            box = (cx - side // 2, cy - side // 2, cx + side // 2, cy + side // 2)
-            detail = "fallback fixed rect (%d,%d,%d,%d)" % (x0, y0, x1, y1)
-            if self._cfg.auto_detect and circle is None:
-                detail += "；自动检测未找到圆形小地图，已回退固定区域"
+            push((int(cx - r), int(cy - r), int(cx + r), int(cy + r)),
+                 "auto_detect circle=(%.0f,%.0f,%.0f)" % (cx, cy, r))
 
-        prep = self._prepare(frame, box)
-        if prep is None:
-            return None, detail, REASON_MINIMAP_NOT_FOUND
-        return prep, detail, ""
+        # 3) 手动配置的固定区域（用户校准过就以它为准）
+        box, detail = self._configured_box(frame)
+        if self._cfg.auto_detect and circle is None:
+            detail += "；自动检测未找到圆形小地图，已回退固定区域"
+        push(box, detail)
+
+        # 4) 四角兜底：只在自动模式下做，手动模式要尊重用户框选的区域
+        if self._cfg.auto_detect:
+            base = 0
+            if box is not None:
+                base = min(box[2] - box[0], box[3] - box[1])
+            for frac in (0.16, 0.24):
+                side = max(base, int(min(h, w) * frac))
+                if side < 24 or side > min(h, w):
+                    continue
+                for name, x0, y0 in (
+                    ("tl", 4, 4),
+                    ("tr", w - side - 4, 4),
+                    ("bl", 4, h - side - 4),
+                    ("br", w - side - 4, h - side - 4),
+                ):
+                    push((x0, y0, x0 + side, y0 + side),
+                         "corner_%s %dpx" % (name, side))
+        return out
 
     def _detect_circle(self, frame):
-        """在左上/右上候选象限里找圆形小地图，返回 (cx, cy, r)（整帧坐标）或 None。"""
+        """在四个角落象限里找圆形小地图，返回 (cx, cy, r)（整帧坐标）或 None。
+
+        只扫左上/右上会漏掉把 UI 放到下方或自定义布局的玩家；四角都扫一遍，
+        单次开销只是多两次缩图 + Hough，可接受。
+        """
         h, w = frame.shape[:2]
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         best = None
         for name, sub, ox, oy in (
             ("tl", gray[: h // 2, : w // 2], 0, 0),
             ("tr", gray[: h // 2, w // 2 :], w // 2, 0),
+            ("bl", gray[h // 2 :, : w // 2], 0, h // 2),
+            ("br", gray[h // 2 :, w // 2 :], w // 2, h // 2),
         ):
             found = self._detect_circle_in(sub, ox, oy)
             if found and (best is None or found[2] > best[2]):
@@ -1030,6 +1205,7 @@ class MinimapLocalizer:
             reason=REASON_OK,
             timestamp=time.time(),
             elapsed_ms=(time.perf_counter() - t0) * 1000.0,
+            detail=self._last_detail,
         )
 
 
@@ -1063,6 +1239,7 @@ class VisionWorker(QObject):
         super().__init__(parent)
         self._cfg = (config or VisionConfig()).cloned()
         self._localizer = MinimapLocalizer(world_map_path, self._cfg)
+        self._smoother = PositionSmoother()
         self._timer: Optional[QTimer] = None
         self._finished_hooked: Optional[QThread] = None
         self._running = False
@@ -1117,6 +1294,7 @@ class VisionWorker(QObject):
         self._running = True
         self._fails = 0
         self._degraded = False
+        self._smoother.reset()
         if self._timer is None:
             # 故意不给 QTimer 设 parent：这样它的生死完全由 Python 引用决定，
             # _release_timer 里置 None 就能在 worker 线程当场析构，
@@ -1164,8 +1342,12 @@ class VisionWorker(QObject):
 
     # -- 内部（只在 worker 线程执行）
     def _do_set_config(self, config: VisionConfig) -> None:
+        old = self._cfg
         self._cfg = (config or VisionConfig()).cloned()
         self._localizer.set_config(self._cfg)
+        if (old.minimap_rect != self._cfg.minimap_rect
+                or old.auto_detect != self._cfg.auto_detect or not self._cfg.smooth):
+            self._smoother.reset()
         if self._timer is not None:
             self._timer.setInterval(self.effective_interval_ms)
 
@@ -1197,6 +1379,8 @@ class VisionWorker(QObject):
         画面恢复正常后也无法自愈。
         """
         res = self._localizer.locate()
+        if res.ok and self._cfg.smooth:
+            res = self._smoother.push(res)
         if res.ok:
             self._fails = 0
             if self._degraded:

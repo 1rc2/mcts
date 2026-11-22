@@ -5,8 +5,8 @@ from __future__ import annotations
 
 import math
 
-from kumap.core.guide import (floor_from_combo, floor_label, generic_hint,
-                              meters_between, plan_walk, point_floor)
+from kumap.core.guide import (auto_route, floor_from_combo, floor_label,
+                              generic_hint, meters_between, plan_walk, point_floor)
 from kumap.core.models import MapPoint
 
 
@@ -78,3 +78,16 @@ def test_two_opt_does_not_make_route_longer():
 def test_meters_between_uses_pack_bbox():
     m = meters_between((0.0, 0.0), (0.01, 0.0), (0.0, 0.0, 0.5, 0.5))
     assert abs(m - 0.01 * 0.5 * 25500) < 1e-6
+    # 非正方形 bbox：纵向单位与横向单位对应的米数不同
+    my = meters_between((0.0, 0.0), (0.0, 0.01), (0.0, 0.0, 0.5, 0.25))
+    assert abs(my - 0.01 * 0.25 * 25500) < 1e-6
+
+
+def test_auto_route_without_start_uses_median_and_orders_by_distance():
+    pts = [_p("far", 0.90, 0.90), _p("near", 0.52, 0.50), _p("mid", 0.70, 0.70)]
+    route = auto_route(pts, layers={"chest"}, limit=10)
+    ids = [p.id for p in route]
+    assert len(ids) == len(set(ids)) == 3
+    # 起点取中位数 (0.70, 0.70)，离它最近的就是 mid
+    assert ids[0] == "mid"
+    assert auto_route([], layers={"chest"}) == []

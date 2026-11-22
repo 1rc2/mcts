@@ -409,7 +409,7 @@ def test_vision_result_to_dict():
     d = res.to_dict()
     assert isinstance(d, dict)
     assert set(d) == {"ok", "x", "y", "rotation", "confidence", "scale", "reason",
-                      "accuracy_note", "timestamp", "elapsed_ms"}
+                      "accuracy_note", "timestamp", "elapsed_ms", "detail"}
     assert d["x"] == 0.25 and d["reason"] == "ok"
     assert d["accuracy_note"] == "识图定位存在误差，仅作探索参考"
     failed = VisionResult(False, None, None, None, 0.0, None, "low_confidence").to_dict()
@@ -417,6 +417,23 @@ def test_vision_result_to_dict():
 
 
 # --------------------------------------------------------------------- Worker
+
+
+def test_position_smoother_reduces_jitter_and_rejects_single_frame_jump():
+    sm = rec.PositionSmoother(alpha=0.45, jump_limit=0.08, confirm_dist=0.04)
+
+    def ok(x, y):
+        return VisionResult(ok=True, x=x, y=y, rotation=0.0, confidence=0.9,
+                            scale=1.0, reason="ok")
+
+    assert sm.push(ok(0.500, 0.500)).x == 0.500      # 首帧直接采纳
+    assert sm.push(ok(0.520, 0.500)).x < 0.520       # EMA 不会一步跳到新值
+    kept = sm.push(ok(0.900, 0.100))                 # 单帧跳变：保持上次
+    assert abs(kept.x - sm._pos[0]) < 1e-9 and kept.confidence <= 0.3
+    confirmed = sm.push(ok(0.902, 0.102))            # 连续第二帧落在附近：接受
+    assert confirmed.x > 0.85
+    # 失败帧不污染平滑状态
+    assert sm.push(VisionResult(False, None, None, None, 0.0, None, "too_few_features")).ok is False
 
 
 def test_worker_locate_once_emits_dict(world_png, qapp):

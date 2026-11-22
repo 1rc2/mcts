@@ -14,12 +14,15 @@ import base64
 import ctypes
 import hashlib
 import json
+import logging
 import os
 import platform
 import secrets
 from pathlib import Path
 
 from . import paths
+
+logger = logging.getLogger("kumap.secure_store")
 
 _APP_ENTROPY = b"KuroMapHelper.v1:kuro-bbs-oauth-token"
 
@@ -150,14 +153,21 @@ class SecureStore:
             envelope = json.loads(self.path.read_text(encoding="utf-8"))
             raw = self._decrypt(envelope["scheme"], base64.b64decode(envelope["blob"]))
             self._cache = json.loads(raw.decode("utf-8"))
-        except Exception:
-            # 密文损坏或换了系统用户：直接视为未登录，绝不明文回退
+        except Exception as exc:
+            # 密文损坏或换了系统用户：直接视为未登录，绝不明文回退。
+            # 但要留一条日志，否则用户只会看到「登录了还是未登录」而无从排查。
+            logger.warning("credential decrypt failed, treated as logged out: %s", exc)
             self._cache = {}
         return self._cache
 
     def write(self, payload: dict) -> None:
         data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-        scheme, blob = self._encrypt(data)
+        try:
+            scheme, blob = self._encrypt(data)
+        except Exception as exc:
+            # DPAPI 失败（权限/配置文件被占用）时给出可诊断的异常，别让登录静默无效
+            logger.error("credential encrypt failed: %s", exc)
+            raise
         envelope = {"scheme": scheme, "blob": base64.b64encode(blob).decode("ascii")}
         tmp = self.path.with_suffix(".tmp")
         tmp.write_text(json.dumps(envelope), encoding="utf-8")

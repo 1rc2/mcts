@@ -90,6 +90,8 @@ class SettingsDialog(QDialog):
         self.cb_follow.setChecked(bool(self.cfg.ui.get("minimap_follow", True)))
         self.cb_mark = QCheckBox("点击点位即标记完成 / 未完成")
         self.cb_mark.setChecked(bool(self.cfg.ui.get("mark_mode", False)))
+        self.cb_overlay_click = QCheckBox("悬浮窗可点击（关闭时鼠标穿透，不挡游戏）")
+        self.cb_overlay_click.setChecked(bool(self.cfg.ui.get("overlay_clickable", False)))
         self.combo_theme = QComboBox()
         self.combo_theme.addItems(["深色", "浅色"])
         self.combo_theme.setCurrentIndex(0 if self.cfg.ui.get("theme") != "light" else 1)
@@ -97,9 +99,24 @@ class SettingsDialog(QDialog):
         self.sl_opacity.setRange(40, 100)
         self.sl_opacity.setSuffix(" %")
         self.sl_opacity.setValue(int(self.cfg.ui.get("opacity", 0.96) * 100))
-        for lbl, wdg in (("主题", self.combo_theme), ("窗口不透明度", self.sl_opacity)):
+        self.sp_overlay_w = QSpinBox()
+        self.sp_overlay_w.setRange(220, 560)
+        self.sp_overlay_w.setSuffix(" px")
+        self.sp_overlay_w.setValue(int(self.cfg.ui.get("overlay_width", 300)))
+        self.sp_overlay_h = QSpinBox()
+        self.sp_overlay_h.setRange(220, 720)
+        self.sp_overlay_h.setSuffix(" px")
+        self.sp_overlay_h.setValue(int(self.cfg.ui.get("overlay_height", 300)))
+        self.sp_overlay_count = QSpinBox()
+        self.sp_overlay_count.setRange(3, 12)
+        self.sp_overlay_count.setSuffix(" 条")
+        self.sp_overlay_count.setValue(int(self.cfg.ui.get("overlay_count", 5)))
+        for lbl, wdg in (("主题", self.combo_theme), ("窗口不透明度", self.sl_opacity),
+                         ("悬浮窗宽", self.sp_overlay_w), ("悬浮窗高", self.sp_overlay_h),
+                         ("悬浮窗显示条数", self.sp_overlay_count)):
             form.addRow(lbl, wdg)
-        for cb in (self.cb_top, self.cb_lock, self.cb_compact, self.cb_tray, self.cb_follow, self.cb_mark):
+        for cb in (self.cb_top, self.cb_lock, self.cb_compact, self.cb_tray, self.cb_follow,
+                   self.cb_mark, self.cb_overlay_click):
             form.addRow(cb)
         tip = QLabel("提示：《鸣潮》请运行在「窗口化 / 无边框窗口」模式，置顶悬浮窗才会浮在游戏之上；"
                      "全屏独占模式下任何置顶窗口都会被遮挡。")
@@ -407,6 +424,10 @@ class SettingsDialog(QDialog):
             "mark_mode": self.cb_mark.isChecked(),
             "theme": "light" if self.combo_theme.currentIndex() == 1 else "dark",
             "opacity": self.sl_opacity.value() / 100.0,
+            "overlay_width": int(self.sp_overlay_w.value()),
+            "overlay_height": int(self.sp_overlay_h.value()),
+            "overlay_count": int(self.sp_overlay_count.value()),
+            "overlay_clickable": self.cb_overlay_click.isChecked(),
         }
         if save:
             for k, v in ui.items():

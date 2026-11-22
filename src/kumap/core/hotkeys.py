@@ -51,6 +51,7 @@ HOTKEY_ACTIONS: dict[str, str] = {
     "prev_waypoint": "上一个目标点",
     "toggle_vision": "开启 / 关闭识图定位",
     "toggle_overlay": "开启 / 关闭游戏内指示窗",
+    "overlay_click": "悬浮窗在「鼠标穿透 / 可点击」之间切换",
     "next_route": "切换下一条路线",
     "toggle_topmost": "切换窗口置顶",
 }

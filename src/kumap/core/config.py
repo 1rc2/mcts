@@ -23,6 +23,10 @@ DEFAULTS: dict[str, Any] = {
         "mark_mode": False,           # 单击点位即切换完成状态
         "close_to_tray": True,        # 关闭窗口时最小化到托盘
         "overlay": False,             # 游戏内悬浮指示窗
+        "overlay_clickable": False,   # 悬浮窗可点击（关闭时鼠标穿透）
+        "overlay_width": 300,         # 悬浮窗尺寸，可在设置里调
+        "overlay_height": 300,        # 5 条点位刚好放满，不空一大截
+        "overlay_count": 5,           # 列表里显示几条未探索点位
         "map_only": True,             # 默认以官方浏览器地图为主界面
     },
     "vision": {
@@ -40,6 +44,7 @@ DEFAULTS: dict[str, Any] = {
         "prev_waypoint": "ctrl+alt+b",
         "toggle_vision": "ctrl+alt+v",
         "toggle_overlay": "ctrl+alt+o",
+        "overlay_click": "ctrl+alt+k",
         "next_route": "ctrl+alt+r",
         "toggle_topmost": "ctrl+alt+t",
     },
@@ -63,23 +68,60 @@ DEFAULTS: dict[str, Any] = {
 
 
 def _merge(base: dict, over: dict) -> dict:
+    if not isinstance(over, dict):
+        return dict(base)
     out = dict(base)
     for k, v in (over or {}).items():
         if isinstance(v, dict) and isinstance(out.get(k), dict):
             out[k] = _merge(out[k], v)
+        elif isinstance(out.get(k), dict) and not isinstance(v, dict):
+            # 章节被手改成 null / 列表 / 字符串时保留默认章节：
+            # 这类脏值以前会让 _clamp 直接抛异常，而 Config() 在 excepthook 之前构造，
+            # 打包版没有控制台，表现就是「双击没反应」。
+            continue
         else:
             out[k] = v
     return out
 
 
+def _as_int(value, default: int, low: int, high: int) -> int:
+    try:
+        return int(min(high, max(low, int(value))))
+    except (TypeError, ValueError):
+        return default
+
+
+def _as_float(value, default: float, low: float, high: float) -> float:
+    try:
+        return float(min(high, max(low, float(value))))
+    except (TypeError, ValueError):
+        return default
+
+
 def _clamp(cfg: dict) -> dict:
+    for name in ("ui", "vision", "hotkeys", "layers_visible", "sync", "data", "account"):
+        if not isinstance(cfg.get(name), dict):
+            cfg[name] = dict(DEFAULTS[name])
     v = cfg["vision"]
-    v["interval_ms"] = int(min(10000, max(500, int(v.get("interval_ms", 1500)))))
-    v["sensitivity"] = float(min(1.0, max(0.0, float(v.get("sensitivity", 0.55)))))
-    r = v.get("minimap_rect") or [0.008, 0.012, 0.115, 0.115]
-    v["minimap_rect"] = [float(x) for x in r][:4]
+    v["enabled"] = bool(v.get("enabled", False))
+    v["auto_detect"] = bool(v.get("auto_detect", True))
+    v["smooth"] = bool(v.get("smooth", True))
+    v["interval_ms"] = _as_int(v.get("interval_ms"), 1500, 500, 10000)
+    v["sensitivity"] = _as_float(v.get("sensitivity"), 0.55, 0.0, 1.0)
+    r = v.get("minimap_rect")
+    try:
+        vals = [float(x) for x in list(r)[:4]]
+        if len(vals) != 4:
+            raise ValueError
+        v["minimap_rect"] = vals
+    except (TypeError, ValueError):
+        v["minimap_rect"] = list(DEFAULTS["vision"]["minimap_rect"])
     u = cfg["ui"]
-    u["opacity"] = float(min(1.0, max(0.4, float(u.get("opacity", 0.96)))))
+    u["opacity"] = _as_float(u.get("opacity"), 0.96, 0.4, 1.0)
+    u["overlay_width"] = _as_int(u.get("overlay_width"), 300, 220, 560)
+    u["overlay_height"] = _as_int(u.get("overlay_height"), 300, 220, 720)
+    u["overlay_count"] = _as_int(u.get("overlay_count"), 5, 3, 12)
+    u["overlay_clickable"] = bool(u.get("overlay_clickable", False))
     u["theme"] = "light" if u.get("theme") == "light" else "dark"
     return cfg
 
@@ -95,8 +137,11 @@ class Config:
         if self.path.exists():
             try:
                 raw = json.loads(self.path.read_text(encoding="utf-8"))
+                with_defaults = _merge(DEFAULTS, raw)
+                self.data = _clamp(with_defaults)
+                return
             except Exception:
-                # 配置文件损坏时备份并回到默认，不阻塞启动
+                # 配置文件损坏/类型完全对不上时备份并回到默认，不阻塞启动
                 try:
                     self.path.rename(self.path.with_suffix(".broken"))
                 except Exception:

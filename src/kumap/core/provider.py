@@ -235,7 +235,8 @@ class DataProvider:
     def load_dataset(self) -> MapDataset:  # pragma: no cover - 抽象
         raise NotImplementedError
 
-    def load_routes(self) -> list[Route]:  # pragma: no cover - 抽象
+    def load_routes(self, valid_point_ids: set[str] | None = None) -> list[Route]:
+        """valid_point_ids 不为 None 时，丢弃引用了不存在点位的路线。"""
         raise NotImplementedError
 
     def map_image_path(self, dataset: MapDataset) -> Path | None:
@@ -371,7 +372,14 @@ class LocalDataProvider(DataProvider):
                 continue
             p = Path(cand)
             if not p.is_absolute():
-                p = self.res / cand
+                # 相对路径先按数据包目录找（数据作者写 "world_map.png" 的直觉做法），
+                # 再退回内置资源目录。否则同目录里明明有底图，却静默用了内置占位图，
+                # 点位与底图不同源，看起来就是「位置全错」。
+                for base in (self.imp, self.res):
+                    cand_path = base / p
+                    if cand_path.exists():
+                        return cand_path
+                continue
             if p.exists():
                 return p
         # 同源底图：PNG 优先，其次 JPEG/WEBP（官方导出多为 JPG，避免强制转码）
@@ -411,14 +419,23 @@ class KuroApiProvider(DataProvider):
             raise ProviderError(f"读取库街区点位数据失败，已回退本地数据：{exc}") from exc
         return MapDataset.from_payload(payload)
 
-    def load_routes(self) -> list[Route]:
+    def load_routes(self, valid_point_ids: set[str] | None = None) -> list[Route]:
+        """与 LocalDataProvider 保持同一签名：上层统一按 valid_point_ids 过滤。"""
         if not self.api.routes_url:
-            return self.fallback.load_routes()
+            return self.fallback.load_routes(valid_point_ids=valid_point_ids)
         try:
             payload = http_json(self.api.routes_url, headers=self._headers() if self.api.is_configured() else None)
         except (urllib.error.URLError, ValueError, TimeoutError, OSError) as exc:
             raise ProviderError(f"读取库街区路线数据失败，已回退本地数据：{exc}") from exc
-        return [Route.from_dict(r) for r in payload.get("routes", [])]
+        routes: list[Route] = []
+        for r in payload.get("routes", []):
+            route = Route.from_dict(r)
+            if valid_point_ids is not None and (
+                    not route.steps
+                    or any(s.point_id not in valid_point_ids for s in route.steps)):
+                continue
+            routes.append(route)
+        return routes
 
     def map_image_path(self, dataset: MapDataset) -> Path | None:
         return self.fallback.map_image_path(dataset)

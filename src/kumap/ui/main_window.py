@@ -19,8 +19,9 @@ from ..core.auth import AuthManager
 from ..core.config import Config
 from ..core.hotkeys import HOTKEY_ACTIONS, HotkeyManager
 from ..core.marker_store import MarkerStore
-from ..core.guide import (ARRIVE_METERS, floor_from_combo, floor_label, generic_hint,
-                          meters_between, plan_walk, point_floor)
+from ..core.guide import (ARRIVE_METERS, auto_route, floor_from_combo, floor_label,
+                          generic_hint, meters_between, plan_walk, point_floor,
+                          relative_bearing)
 from ..core.models import Layer, MapPoint, Route, RouteStep
 from ..core.provider import (ApiConfig, DataProvider, KuroApiProvider, LocalDataProvider,
                              ProviderError, discover_map_packs)
@@ -63,11 +64,15 @@ class VisionRunner(QObject):
             minimap_rect=tuple(self.cfg.get("minimap_rect", (0.008, 0.012, 0.115, 0.115))),
             auto_detect=bool(self.cfg.get("auto_detect", True)),
             sensitivity=float(self.cfg.get("sensitivity", 0.55)),
+            smooth=bool(self.cfg.get("smooth", True)),
         )
 
     def start(self) -> None:
         if self.thread is not None:
-            self.stop()
+            if not self.stop():
+                # 上一轮线程还没退干净：先别起第二个，否则两个识别线程抢同一张索引
+                self.availability.emit(False, "识图线程正在退出，请稍后再开启")
+                return
         from ..core.recognizer import VisionWorker
 
         if not self.map_image or not Path(self.map_image).exists():
@@ -94,20 +99,27 @@ class VisionRunner(QObject):
         self.availability.emit(True, "识图已开启")
 
     def _on_worker_stopped(self) -> None:
-        if self.thread and self.thread.isRunning():
-            self.thread.quit()
+        # 只负责让 worker 线程退出事件循环。
+        # 这里绝对不能把 self.thread 置空：线程可能还在跑，丢掉唯一的 Python 引用
+        # 会析构仍在运行的 QThread，Qt 会直接 abort（表现为“点关闭识图就闪退”）。
+        thread = self.thread
+        if thread is not None and thread.isRunning():
+            thread.quit()
+
+    def stop(self) -> bool:
+        """停止识图线程；返回 False 表示线程 3s 内没退出（引用保留，下次再收）。"""
+        self.enabled = False
+        worker, thread = self.worker, self.thread
+        if worker is not None:
+            worker.stop()
+        if thread is not None:
+            thread.quit()
+            if not thread.wait(3000):
+                return False
+            thread.deleteLater()
         self.thread = None
         self.worker = None
-
-    def stop(self) -> None:
-        self.enabled = False
-        if self.worker:
-            self.worker.stop()
-        if self.thread:
-            self.thread.quit()
-            self.thread.wait(2500)
-            self.thread = None
-        self.worker = None
+        return True
 
     def apply(self, cfg: dict, enabled: bool | None = None) -> None:
         self.cfg = dict(cfg)
@@ -194,7 +206,12 @@ class MainWindow(QMainWindow):
         lay.addWidget(self.canvas, 1)
         lay.addWidget(self.panel)
         self.setCentralWidget(central)
-        self.overlay = OverlayHUD(self.ui.get("theme", "dark"))
+        self.overlay = OverlayHUD(self.ui.get("theme", "dark"),
+                                  width=int(self.ui.get("overlay_width", 300)),
+                                  height=int(self.ui.get("overlay_height", 300)))
+        self.overlay.set_opacity(float(self.ui.get("opacity", 0.96)))
+        self.overlay.set_clickable(bool(self.ui.get("overlay_clickable", False)))
+        self.overlay.point_done.connect(self._on_overlay_point_done)
 
         self.status = QLabel("", self)
         self.status.setObjectName("StatusBar")
@@ -260,7 +277,7 @@ class MainWindow(QMainWindow):
         self.btn_mark.toggled.connect(self._set_mark_mode)
         self.btn_vision = tool("👁", "开启 / 关闭屏幕识图", True)
         self.btn_vision.toggled.connect(self._toggle_vision)
-        self.btn_overlay = tool("➤", "游戏内悬浮指示（置顶、可穿透，不挡操作）", True)
+        self.btn_overlay = tool("➤", "未探索点位浮窗（贴左下角、置顶、可穿透）", True)
         self.btn_overlay.setChecked(bool(self.ui.get("overlay", False)))
         self.btn_overlay.toggled.connect(self._toggle_overlay)
         self.btn_theme = tool("◐", "深色 / 浅色主题")
@@ -386,6 +403,12 @@ class MainWindow(QMainWindow):
         self.canvas.hide_completed = bool(self.ui.get("hide_completed", False))
         self.btn_hide_done.setChecked(self.canvas.hide_completed)
         self.panel.set_layers(self.layers, self._layer_counts(), visible)
+        # 数据包没有 routes_*.json 时，至少给一条能用的顺路路线，别让「探索路线」空着
+        if not self.routes and self.points:
+            auto = self._make_auto_route()
+            if auto is not None:
+                self.routes = [auto]
+                self._notify(f"当前数据包没有路线文件，已按就近顺序自动生成「{auto.name}」")
         self._refresh_progress()
         self._refresh_routes()
         self._refresh_account_chip()
@@ -401,6 +424,28 @@ class MainWindow(QMainWindow):
         if self.ui.get("overlay"):
             self.overlay.show()
             self.overlay.raise_()
+
+    def _make_auto_route(self, layers=None, floor: str = "", limit: int = 120):
+        """用当前点位自动排一条顺路路线（没有 routes 文件时的兜底）。"""
+        pool = [p for p in self.points if getattr(p, "source", "") != "private"]
+        if not pool:
+            return None
+        done = {p.id for p in pool if self.store.is_done(p.id)}
+        wanted = layers or {"chest", "puzzle", "quest", "anchor"}
+        pts = auto_route(pool, layers=wanted, floor=floor, limit=limit, exclude_ids=done)
+        if not pts:
+            pts = auto_route(pool, layers=None, floor=floor, limit=limit, exclude_ids=done)
+        if not pts:
+            return None
+        steps = [RouteStep(seq=i + 1, point_id=p.id, label=p.name,
+                           note=(p.note or generic_hint(p.layer)))
+                 for i, p in enumerate(pts)]
+        pack = self._current_pack()
+        key = str(getattr(pack, "key", "root") or "root")
+        return Route(id=f"auto-{key}", name=f"自动顺路 · {len(steps)} 站",
+                     author="本机自动排序",
+                     description="由当前地图包的点位按就近顺序自动生成（最近邻 + 2-opt），只含未完成点位。",
+                     tags=["自动"], steps=steps)
 
     def _current_pack_key(self, packs) -> str:
         imp = self.cfg.data_cfg.get("import_dir")
@@ -419,9 +464,17 @@ class MainWindow(QMainWindow):
         return "root"
 
     def _current_pack(self):
+        # 向导每帧都要拿 bbox 算距离；discover_map_packs() 是目录 glob，
+        # 每帧扫一遍 import/maps 太浪费，按 import_dir 缓存结果。
+        key = str(self.cfg.data_cfg.get("import_dir") or "")
+        cached = getattr(self, "_pack_cache", None)
+        if cached is not None and cached[0] == key:
+            return cached[1]
         packs = discover_map_packs()
-        key = self._current_pack_key(packs)
-        return next((p for p in packs if p.key == key), None)
+        pk = self._current_pack_key(packs)
+        pack = next((p for p in packs if p.key == pk), None)
+        self._pack_cache = (key, pack)
+        return pack
 
     def _refresh_map_packs(self) -> None:
         try:
@@ -444,6 +497,7 @@ class MainWindow(QMainWindow):
         self.cfg.set("data", "import_dir", None if pack.is_root else str(pack.directory))
         self.cfg.set("data", "points_file", None)
         self.cfg.set("data", "map_image", None)
+        self._pack_cache = None
         self.local_provider = self._make_local_provider()
         if isinstance(self.provider, KuroApiProvider):
             self.provider.fallback = self.local_provider
@@ -477,6 +531,8 @@ class MainWindow(QMainWindow):
                 self._official_dialog = dlg
                 dlg.finished.connect(self._on_official_closed)
                 dlg.vision_toggled.connect(self._toggle_vision)
+                dlg.vision_calibrate.connect(self._calibrate_minimap)
+                dlg.vision_probe.connect(self._probe_vision)
                 dlg.prev_waypoint.connect(lambda: self.step_waypoint(-1))
                 dlg.next_waypoint.connect(lambda: self.step_waypoint(+1))
                 dlg.complete_waypoint.connect(self._complete_current_waypoint)
@@ -499,6 +555,7 @@ class MainWindow(QMainWindow):
             if self.guide_mode:
                 self._refresh_guide_options()
             dlg.set_vision_state(bool(self.cfg.vision.get("enabled", False)))
+            self._update_vision_status()
             self._sync_overlay_route()
             self._update_overlay_status()
             if self.canvas._player:
@@ -509,9 +566,14 @@ class MainWindow(QMainWindow):
             self._notify(f"应用内浏览器不可用（{exc}），已改用系统浏览器", warn=True)
 
     def _on_official_closed(self, _code=0) -> None:
+        dlg = getattr(self, "_official_dialog", None)
         self._official_dialog = None
         self.guide_mode = False
         self._guide_auto_plan = False
+        if dlg is not None:
+            # 对话框以主窗口为 parent，光置 None 不会释放：反复打开会累积
+            # QWebEngineProfile/View/Page（多进程 + 显存）。这里显式回收。
+            dlg.deleteLater()
         if self._quitting:
             return
         if self.cfg.ui.get("map_only") and not self.isVisible():
@@ -591,23 +653,39 @@ class MainWindow(QMainWindow):
         bbox = getattr(pack, "bbox", None) if pack is not None else None
         return meters_between((point.x, point.y), self.canvas._player, bbox)
 
+    def _guide_fallback_start(self, layers, floor: str):
+        """还没定位时的起点：取候选点位的中位数坐标（抗离群点，比质心稳）。"""
+        cand = [p for p in self.points
+                if (not layers or p.layer in layers) and point_floor(p) == floor]
+        if not cand:
+            cand = list(self.points)
+        if not cand:
+            return (0.5, 0.5)
+        xs = sorted(p.x for p in cand)
+        ys = sorted(p.y for p in cand)
+        return (xs[len(xs) // 2], ys[len(ys) // 2])
+
     def _guide_plan(self, layers=None, floor: str = "") -> None:
         dlg = getattr(self, "_official_dialog", None)
         if dlg is None:
             return
         dlg.guide.set_planning(True)
-        if not self.canvas._player:
-            dlg.guide.set_planning(False)
-            dlg.guide.set_status("还没有位置：先开启识图，或用「手动标记我的位置」")
-            return
-        layers = set(layers or dlg.guide.selected_layers())
+        # 没有定位时不再直接拒绝：向导本身仍然可用（路线 + 到站提示），
+        # 只是从「当前活动区域中心」起算，并在面板上说清楚。
+        start = self.canvas._player
+        unlocated = not bool(start)
+        if not layers:
+            layers = dlg.guide.selected_layers()
+        layers = set(layers or ())
         floor = str(floor if floor is not None else "")
         if not layers:
             dlg.guide.set_planning(False)
             dlg.guide.set_status("至少勾选一类点位")
             return
+        if unlocated:
+            start = self._guide_fallback_start(layers, floor)
         done = {p.id for p in self.points if self.store.is_done(p.id)}
-        points = plan_walk(self.points, self.canvas._player, layers=layers, floor=floor,
+        points = plan_walk(self.points, start, layers=layers, floor=floor,
                            limit=60, radius=0.2, exclude_ids=done)
         if not points:
             dlg.guide.set_planning(False)
@@ -634,7 +712,11 @@ class MainWindow(QMainWindow):
         dlg.guide.set_planning(False)
         self.load_route(route.id)
         self._guide_update_panel()
-        dlg.guide.set_status(f"已规划 {len(steps)} 站；按顺序前往，到达后在右侧点「完成当前」")
+        if unlocated:
+            dlg.guide.set_status(f"已规划 {len(steps)} 站。当前还没有位置，路线按活动区域中心起算；"
+                                 f"识图成功后点「根据当前位置规划」会按你脚下重排。")
+        else:
+            dlg.guide.set_status(f"已规划 {len(steps)} 站；按顺序前往，到达后在右侧点「完成当前」")
         self._notify(f"探索向导：已规划 {len(steps)} 站，下一站 {points[0].name}")
         self.tray.showMessage("探索向导", f"已规划 {len(steps)} 站；下一站：{points[0].name}")
 
@@ -939,6 +1021,9 @@ class MainWindow(QMainWindow):
         self.panel.set_progress(done, total)
         if self.active_route:
             self._update_waypoint_label()
+        # 任意来源（画布 / 热键 / 悬浮窗）改了完成状态，都让浮窗清单跟着变
+        if getattr(self, "overlay", None) is not None:
+            self._refresh_overlay_list()
 
     def enable_manual_pick(self) -> None:
         self.canvas.set_pick_mode(True)
@@ -1211,6 +1296,10 @@ class MainWindow(QMainWindow):
             self.overlay.hide()
             return
         self.overlay.set_theme(self.ui.get("theme", "dark"))
+        self.overlay.set_size(int(self.ui.get("overlay_width", 300)),
+                              int(self.ui.get("overlay_height", 300)))
+        self.overlay.set_opacity(float(self.ui.get("opacity", 0.96)))
+        self.overlay.set_clickable(bool(self.ui.get("overlay_clickable", False)))
         self.overlay.set_map(self.canvas._pix)
         self._sync_overlay_route()
         if self.canvas._player:
@@ -1221,7 +1310,8 @@ class MainWindow(QMainWindow):
         self._update_overlay_status()
         self.overlay.show()
         self.overlay.raise_()
-        self._notify("游戏内指示已开启：置顶小窗鼠标可穿透；游戏需窗口化/无边框才能浮在上层")
+        self._notify("未探索点位浮窗已开启：贴左下角、置顶；Ctrl+Alt+K 可切成可点击；"
+                     "游戏需窗口化/无边框才能浮在上层")
 
     def _sync_overlay_route(self) -> None:
         dlg = getattr(self, "_official_dialog", None)
@@ -1243,22 +1333,93 @@ class MainWindow(QMainWindow):
             dlg.set_route(coords, self.waypoint, label)
 
     def _update_overlay_status(self) -> None:
+        # 官方地图窗口那行仍然显示「距下一站」的距离（它只服务向导）
+        dlg_text = "未加载路线"
         if self.active_route and 0 <= self.waypoint < len(self.active_route.steps):
             dist = self.overlay.next_distance_m()
             if dist is None:
-                text = "下一站：等待定位"
+                dlg_text = "下一站：等待定位"
             elif dist < 20:
-                text = "已到下一站附近"
+                dlg_text = "已到下一站附近"
             elif dist >= 1000:
-                text = f"距下一站约 {dist / 1000:.1f} km"
+                dlg_text = f"距下一站约 {dist / 1000:.1f} km"
             else:
-                text = f"距下一站约 {dist:.0f} m"
-        else:
-            text = "未加载路线"
-        self.overlay.set_status(text)
+                dlg_text = f"距下一站约 {dist:.0f} m"
         dlg = getattr(self, "_official_dialog", None)
         if dlg is not None:
-            dlg.set_position_status(text)
+            dlg.set_position_status(dlg_text)
+
+        # 悬浮窗顶部只讲定位状态 + 列表，不再抢「下一站」那套
+        if self.canvas._player:
+            text = "已手动定位" if self.canvas._player_src == "manual" else "位置已获取"
+            if self.canvas._player_rot is None:
+                # 手动定位/识图没解出朝向：箭头只能按正北向上，必须写明白
+                text += " · 北向基准（暂无朝向）"
+        else:
+            text = "未定位 · 按地图中心起算"
+        if self.active_route and 0 <= self.waypoint < len(self.active_route.steps):
+            text += f" · 下一站 {self.waypoint + 1}/{len(self.active_route.steps)}"
+        self.overlay.set_status(text)
+        self._refresh_overlay_list()
+
+    def _refresh_overlay_list(self) -> None:
+        """把最近 N 个未探索点位算好交给悬浮窗（隐藏图层与已完成在这里过滤）。"""
+        origin = self.canvas._player
+        unlocated = origin is None
+        if unlocated:
+            origin = (0.5, 0.5)
+        facing = None if unlocated else self.canvas._player_rot
+        rows: list[dict] = []
+        points = getattr(self, "points", []) or []
+        if points:
+            visible = {l.key for l in getattr(self, "layers", []) if self.cfg.layer_visible(l.key)}
+            pack = self._current_pack()
+            bbox = getattr(pack, "bbox", None)
+            candidates = []
+            for p in points:
+                if p.layer not in visible or self.store.is_done(p.id):
+                    continue
+                candidates.append((meters_between(origin, (p.x, p.y), bbox), p))
+            candidates.sort(key=lambda t: t[0])
+            try:
+                count = int(self.ui.get("overlay_count", 5))
+            except (TypeError, ValueError):
+                count = 5
+            for dist, point in candidates[:min(12, max(3, count))]:
+                layer = self.layer_map.get(point.layer)
+                bearing, _used_facing = relative_bearing(origin, (point.x, point.y),
+                                                         bbox=bbox, facing=facing)
+                rows.append({
+                    "id": point.id,
+                    "name": point.name,
+                    "dist_m": dist,
+                    "layer": layer.label if layer is not None else point.layer,
+                    "color": getattr(layer, "color", None) if layer is not None else None,
+                    # 未定位时不画箭头：按地图中心算出来的方向没有意义
+                    "bearing": None if unlocated else bearing,
+                })
+        self.overlay.set_unlocated(unlocated)
+        self.overlay.set_items(rows)
+
+    def _on_overlay_point_done(self, point_id: str) -> None:
+        point_id = str(point_id or "")
+        if not point_id or self.store.is_done(point_id):
+            return
+        self.store.set_done(point_id, True, origin="overlay")
+        point = next((p for p in self.points if p.id == point_id), None)
+        self._notify(f"悬浮窗已标记完成：{point.name if point else point_id}")
+        self._refresh_overlay_list()
+
+    def _toggle_overlay_clickable(self, on: bool | None = None) -> None:
+        current = bool(self.ui.get("overlay_clickable", False))
+        on = (not current) if on is None else bool(on)
+        self.ui["overlay_clickable"] = on
+        self.cfg.set("ui", "overlay_clickable", on)
+        self.overlay.set_clickable(on)
+        if on:
+            self._notify("悬浮窗已切到可点击：点条目即标记完成；Ctrl+Alt+K 恢复穿透")
+        else:
+            self._notify("悬浮窗已恢复鼠标穿透，不会挡住游戏操作")
 
     def _update_vision_cfg(self, **changes) -> None:
         for k, v in changes.items():
@@ -1287,6 +1448,57 @@ class MainWindow(QMainWindow):
             self.enable_manual_pick()
             self._notify(msg, warn=True)
 
+    # ------------------------------------------------------------------ 识图校准
+    def _calibrate_minimap(self) -> None:
+        """框选一次游戏小地图区域，落盘并立刻试识别。
+
+        自动检测只对圆形小地图靠谱；方形、被 HUD 遮挡、或者 UI 布局特殊的玩家
+        会一直漏检，随后回退到默认矩形必然裁偏。所以把「框一下小地图」的入口
+        直接放到官方地图窗口，一步到位。
+        """
+        host = getattr(self, "_official_dialog", None) or self
+        host.showMinimized()
+        QTimer.singleShot(350, lambda: self._do_calibrate_minimap(host))
+
+    def _do_calibrate_minimap(self, host) -> None:
+        from PySide6.QtWidgets import QApplication
+
+        from .region_picker import pick_region
+
+        rect = None
+        try:
+            rect = pick_region()
+        finally:
+            if host is not None:
+                host.showNormal()
+                host.raise_()
+        if rect is None or rect.width() < 24 or rect.height() < 24:
+            self._notify("已取消框选（区域太小或按了 Esc）", warn=True)
+            return
+        screen = QApplication.primaryScreen()
+        size = screen.size() if screen is not None else None
+        if size is None or size.width() <= 0 or size.height() <= 0:
+            self._notify("拿不到主屏尺寸，无法换算框选区域", warn=True)
+            return
+        nx = min(max(0.0, rect.x() / size.width()), 1.0)
+        ny = min(max(0.0, rect.y() / size.height()), 1.0)
+        nw = min(max(0.02, rect.width() / size.width()), 1.0 - nx)
+        nh = min(max(0.02, rect.height() / size.height()), 1.0 - ny)
+        self.cfg.set("vision", "minimap_rect", [nx, ny, nw, nh])
+        self.cfg.set("vision", "auto_detect", False)
+        self._update_vision_cfg()
+        self._notify(f"小地图区域已校准为 {rect.width()}×{rect.height()}（自动检测已关闭），正在试识别…")
+        if not self.cfg.vision.get("enabled", False):
+            self._toggle_vision(True)
+        QTimer.singleShot(500, self.vision.locate_once)
+
+    def _probe_vision(self) -> None:
+        """立刻识别一次，结果与失败细节走正常信号链显示。"""
+        if not self.cfg.vision.get("enabled", False):
+            self._toggle_vision(True)
+        self.vision.locate_once()
+        self._notify("已触发一次识图自检，结果会显示在窗口状态里")
+
     def _update_vision_status(self, res=None) -> None:
         enabled = self.cfg.vision.get("enabled", False)
         if not enabled:
@@ -1307,8 +1519,17 @@ class MainWindow(QMainWindow):
                 "map_index_missing": "地图底图未加载",
                 "dependency_missing": "缺少识图依赖",
             }.get(res.reason, res.reason)
-            text = f"识图失败：{reason}（已连续 {self.vision.fail_streak} 次）→ 改用手动定位\n{res.accuracy_note}"
+            detail = (getattr(res, "detail", "") or "").strip()
+            text = f"识图失败：{reason}（已连续 {self.vision.fail_streak} 次）→ 改用手动定位"
+            if detail:
+                text += f"\n原因细节：{detail[:180]}"
+            text += f"\n{res.accuracy_note}"
         self.panel.set_vision(bool(enabled) and self.vision.available, text, self.vision.available)
+        # 默认是「只开官方地图」模式：侧栏根本看不见，失败原因必须同步到官方地图窗口，
+        # 否则用户只能看到「位置不动」，无从判断是小地图没找到还是底图不对。
+        dlg = getattr(self, "_official_dialog", None)
+        if dlg is not None:
+            dlg.set_vision_status(text)
         self.chip_vision.setText("识图开" if enabled else "识图关")
         self.chip_vision.setObjectName("WarnChip" if enabled else "StatusChip")
         self.btn_vision.blockSignals(True)
@@ -1325,6 +1546,10 @@ class MainWindow(QMainWindow):
         self.canvas.set_theme(theme)
         self.panel.apply_theme(theme)
         self.setWindowOpacity(float(self.ui.get("opacity", 0.96)))
+        self.overlay.set_size(int(self.ui.get("overlay_width", 300)),
+                              int(self.ui.get("overlay_height", 300)))
+        self.overlay.set_opacity(float(self.ui.get("opacity", 0.96)))
+        self.overlay.set_clickable(bool(self.ui.get("overlay_clickable", False)))
         self._set_topmost(self.ui.get("always_on_top", True), save=False)
         self.canvas.set_hide_completed(bool(self.ui.get("hide_completed", False)))
         if self.ui.get("lock_size", False):
@@ -1337,10 +1562,15 @@ class MainWindow(QMainWindow):
 
     def _set_topmost(self, on: bool, save: bool = True) -> None:
         flags = self.windowFlags() & ~Qt.WindowStaysOnTopHint
+        was_visible = self.isVisible()
         if on:
             flags |= Qt.WindowStaysOnTopHint
         self.setWindowFlags(flags)
-        self.show()
+        # setWindowFlags 会把窗口隐藏掉。只有原本可见时才恢复显示：
+        # 构造函数里也会走到这里，无条件 show() 会让 --map-only / --guide
+        # 启动时先闪一下主窗口，也会把托盘里隐藏的主窗口弹回来。
+        if was_visible:
+            self.show()
         if save:
             self.cfg.set("ui", "always_on_top", bool(on))
         self.btn_top.blockSignals(True)
@@ -1390,6 +1620,7 @@ class MainWindow(QMainWindow):
         self.ui["opacity"] = nxt
         self.cfg.set("ui", "opacity", nxt)
         self.setWindowOpacity(nxt)
+        self.overlay.set_opacity(nxt)
         self.status.setText(f"窗口透明度 {int(nxt * 100)}%（点击按钮循环切换，也可在设置里精调）")
 
     def _toggle_theme(self) -> None:
@@ -1415,6 +1646,7 @@ class MainWindow(QMainWindow):
             "prev_waypoint": lambda: self.step_waypoint(-1),
             "toggle_vision": lambda: self._toggle_vision(not self.cfg.vision.get("enabled", False)),
             "toggle_overlay": lambda: self._toggle_overlay(not self.ui.get("overlay", False)),
+            "overlay_click": self._toggle_overlay_clickable,
             "next_route": self._cycle_routes,
             "toggle_topmost": lambda: self._set_topmost(not self.ui.get("always_on_top", True)),
         }
@@ -1441,6 +1673,7 @@ class MainWindow(QMainWindow):
             "prev_waypoint": lambda: self.step_waypoint(-1),
             "toggle_vision": lambda: self._toggle_vision(not self.cfg.vision.get("enabled", False)),
             "toggle_overlay": lambda: self._toggle_overlay(not self.ui.get("overlay", False)),
+            "overlay_click": self._toggle_overlay_clickable,
             "next_route": self._cycle_routes,
             "toggle_topmost": lambda: self._set_topmost(not self.ui.get("always_on_top", True)),
         }

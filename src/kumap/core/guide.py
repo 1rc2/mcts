@@ -130,5 +130,57 @@ def meters_between(a: tuple[float, float], b: tuple[float, float],
     norm = _dist(a, b)
     if bbox:
         x0, y0, x1, y1 = bbox
-        return norm * max(1e-9, (x1 - x0)) * 25500.0
-    return norm * 6144.0 * (25500.0 / 6144.0)
+        # 国家包的 bbox 通常不是正方形，x/y 的归一化单位对应的米数并不相同。
+        # 只拿 x 跨度去乘会把纵向上千公里的距离压扁（实测 bbox 纵横比可差一倍），
+        # 35m 到站判定也会跟着偏。
+        dx = (float(b[0]) - float(a[0])) * max(1e-9, (x1 - x0)) * 25500.0
+        dy = (float(b[1]) - float(a[1])) * max(1e-9, (y1 - y0)) * 25500.0
+        return math.hypot(dx, dy)
+    return norm * 25500.0
+
+
+def relative_bearing(origin: tuple[float, float], target: tuple[float, float],
+                     bbox: tuple | None = None,
+                     facing: float | None = None) -> tuple[float, bool]:
+    """点位相对「屏幕上方」的方位角（0~360，顺时针）。
+
+    facing 是角色朝向（与地图画布一致：0=正北，顺时针度数）。给了朝向就以朝向为
+    屏幕上方回算，怎么转视角箭头都指着目标；没给就退化为正北向上。
+    返回 (角度, 是否用了朝向)，第二个值让 UI 能明确标注「北向基准」。
+    """
+    if bbox:
+        x0, y0, x1, y1 = bbox
+        dx = (float(target[0]) - float(origin[0])) * max(1e-9, x1 - x0)
+        dy = (float(target[1]) - float(origin[1])) * max(1e-9, y1 - y0)
+    else:
+        dx = float(target[0]) - float(origin[0])
+        dy = float(target[1]) - float(origin[1])
+    # 屏幕 y 向下，正北是 -y：atan2(dx, -dy) 正好是 0=上、顺时针
+    north = math.degrees(math.atan2(dx, -dy)) % 360.0
+    if facing is None:
+        return north, False
+    return (north - float(facing)) % 360.0, True
+
+
+def auto_route(points: list[MapPoint], start: tuple[float, float] | None = None,
+               layers: set[str] | None = None, floor: str = "",
+               limit: int = 120, exclude_ids: set[str] | None = None) -> list[MapPoint]:
+    """没有 routes 文件（或向导没有位置）时的兜底路线：把点位就近排成一条顺路顺序。
+
+    与 plan_walk 同一套排序（最近邻 + 2-opt），区别只是不限半径：
+    起点没给就取候选点位的中位数坐标，比取均值更抗离群点。
+    不做全局 TSP 求解——10k 级点位下没有必要，先保证「有路线可用」。
+    """
+    exclude = exclude_ids or set()
+    cand = [p for p in points
+            if p.id not in exclude
+            and (not layers or p.layer in layers)
+            and point_floor(p) == str(floor or "")]
+    if not cand:
+        return []
+    if start is None:
+        xs = sorted(p.x for p in cand)
+        ys = sorted(p.y for p in cand)
+        start = (xs[len(xs) // 2], ys[len(ys) // 2])
+    return plan_walk(points, start, layers=layers, floor=floor,
+                     limit=limit, radius=None, exclude_ids=exclude)
